@@ -3,7 +3,7 @@
 
   Usage:
     odc init
-    odc upload <srcfile> <dstfolder>
+    odc upload <srcfile> <dstfolder> [--logfile=<logfile>]
     odc get_user
     odc get_children <folder>
     odc raw_cmd
@@ -23,8 +23,10 @@ from lib.log import Logger
 
 if __name__ == '__main__':
   args = docopt(__doc__, version='mgcli 1.0')
-
-  lg = Logger("trace.log", Logger.LOG_LEVEL_DEBUG)
+  if args["--logfile"] is not None:
+    lg = Logger(args["--logfile"], Logger.LOG_LEVEL_DEBUG)
+  else:
+    lg = Logger(None, None)
 
   tr = TokenRecorder(".token.json", lg)
   if args["init"]:
