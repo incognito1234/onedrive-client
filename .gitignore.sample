@@ -1,0 +1,6 @@
+oauth_settings.yml
+.gitignore
+.token.json
+*.pyc
+__pycache__/
+
