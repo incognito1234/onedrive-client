@@ -19,16 +19,21 @@ import pprint
 from docopt import docopt
 from lib.shell_helper import MsFolderInfo
 from lib.log import Logger
+import os
 
 
 if __name__ == '__main__':
+
+  current_dirname = os.path.dirname(os.path.realpath(__file__))
+
   args = docopt(__doc__, version='mgcli 1.0')
   if args["--logfile"] is not None:
     lg = Logger(args["--logfile"], Logger.LOG_LEVEL_DEBUG)
   else:
     lg = Logger(None, None)
 
-  tr = TokenRecorder(".token.json", lg)
+  tr = TokenRecorder("{0}/.token.json".format(current_dirname), lg)
+
   if args["init"]:
     sign_in_url, state = get_sign_in_url()
     print("url = {}".format(sign_in_url))
