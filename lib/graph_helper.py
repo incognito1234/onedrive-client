@@ -138,7 +138,7 @@ class MsGraphClient:
 
     # Upload parts of file
     total_size = os.path.getsize(src_file)
-    print("total_size = {0:,}".format(total_size))
+    self.logger.log_debug("total_size = {0:,}".format(total_size))
 
     CHUNK_SIZE = 1048576 * 20  # 20 MB
     current_start = 0
