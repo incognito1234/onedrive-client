@@ -9,12 +9,14 @@
     odc raw_cmd
     odc browse [--logfile=<logfile>]
     odc download <remotefile> <dstlocalpath> [--logfile=<logfile>]
+    odc get_object_info <dstremotepath>
 
   Options:
     <srcfile>          Source file
     <dstremotefolder>  Destination folder
     <remotefile>       Remote file
     <dstlocalpath>     Destination local path (folder or file)
+    <dstremotepath>    Destination remote path (folder or file)
 """
 from lib.auth_helper import get_sign_in_url, get_token_from_code, TokenRecorder
 from lib.graph_helper import MsGraphClient
@@ -87,6 +89,10 @@ if __name__ == '__main__':
         args["<remotefile>"],
         args["<dstlocalpath>"]
     )
+
+  if args["get_object_info"]:
+    r = mgc.get_object_info(args["<dstremotepath>"])
+    print(r[1])
 
   if args["browse"]:
 

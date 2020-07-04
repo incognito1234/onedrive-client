@@ -1,11 +1,66 @@
 
-class MsFolderInfo:
+from abc import ABC, abstractmethod
 
-  def __init__(self, full_path, mgc, child_count=None, size=None, parent=None):
+
+class MsObject(ABC):
+
+  @property
+  @abstractmethod
+  def id():
+    pass
+
+  @property
+  @abstractmethod
+  def path():
+    pass
+
+  @property
+  @abstractmethod
+  def name():
+    pass
+
+  @property
+  def __isabstractmethod__(self):
+    return any(getattr(f, '__isabstractmethod__', False) for
+               f in (self._fget, self._fset, self._fdel))
+
+  def MsObjectFromMgcResponse(mgc, mgc_response_json):
+    if ('folder' in mgc_response_json):
+      # import pprint
+      # pprint.pprint(mgc_response_json)
+      result = MsFolderInfo(
+          "{0}/{1}".format(
+              mgc_response_json['parentReference']['path'][12:],
+              mgc_response_json['name']),
+          mgc,
+          id=mgc_response_json['id'],
+          child_count=mgc_response_json['folder']['childCount'],
+          size=mgc_response_json['size']
+      )
+      return result
+    else:
+      return MsFileInfo(
+          mgc_response_json['name'],
+          mgc,
+          mgc_response_json['id'],
+          mgc_response_json['size'])
+
+
+class MsFolderInfo(MsObject):
+
+  def __init__(
+          self,
+          full_path,
+          mgc,
+          id=0,
+          child_count=None,
+          size=None,
+          parent=None):
     """
         Init folder info
         mgc   = MsGraphClient
     """
+    self.__id = id
     self.__full_path = full_path
     self.__mgc = mgc
     self.children_file = []
@@ -17,6 +72,15 @@ class MsFolderInfo:
 
   def get_full_path(self):
     return self.__full_path
+  path = property(get_full_path)
+
+  def _get_id(self):
+    return self.__id
+  id = property(_get_id)
+
+  def _get_name(self):
+    return self.get_full_path()
+  name = property(_get_name)
 
   def retrieve_children_info(self):
     if not self.children_has_been_retrieved():
@@ -29,6 +93,7 @@ class MsFolderInfo:
               self.get_full_path(),
               c['name']),
               self.__mgc,
+              id=c['id'],
               child_count=c['folder']['childCount'],
               size=c['size'],
               parent=self
@@ -73,35 +138,38 @@ class MsFolderInfo:
 
   def __str__(self):
     if not self.children_has_been_retrieved():
-      result = "{0}/ ({1} - {2:,})".format(self.get_full_path()
-                                           [1:], self.child_count, self.size)
+      result = "Folder - {0}/ ({1} - {2:,})".format(self.get_full_path()
+                                                    [1:], self.child_count, self.size)
     else:
-      result = "{0}/ ({1})- <ok>".format(self.get_full_path()
-                                         [1:], self.child_count)
+      result = "Folder - {0}/ ({1})- <ok>".format(self.get_full_path()
+                                                  [1:], self.child_count)
     return result
 
 
-class MsFileInfo:
+class MsFileInfo(MsObject):
   def __init__(self, name, mgc, file_id, size):
-    self.name = name
-    self.id = file_id
-    self.size = size
     self.mgc = mgc
+    self.__name = name
+    self.__id = file_id
+    self.size = size
+
+  def _get_path(self):
+    super._get_path()
+    return self.name
+  path = property(_get_path)
+
+  def _get_id(self):
+    return self.__id
+  id = property(_get_id)
+
+  def _get_name(self):
+    return self.__name
+  name = property(_get_name)
 
   def __str__(self):
-    result = "{0:35} - {1:>25} - {2:>20,}".format(
+    result = "File - {0:35} - {1:>25} - {2:>20,}".format(
         self.name,
-        self.id,
+        self.__id,
         self.size
     )
     return result
-
-
-# class MsFolderInfoFactory:
-
-#   def FolderInfoFromFullPath(full_path, mgc, parent = None):
-#     """ Build folder info from children info retrieved from ms graph
-#     """
-#     root_folder = MsFolderInfo(full_path, mgc, parent)
-#     root_folder.get_folder_info()
-#     return root_folder
