@@ -151,7 +151,7 @@ class MsGraphClient:
         if current_start > total_size:
           stop_reason = "current_size_oversized"
           break
-        if i > 200:
+        if i > 2000:
           stop_reason = "exceed_number_of_loop"
           break
 
@@ -181,6 +181,8 @@ class MsGraphClient:
     # Close URL
     self.cancel_upload(uurl)
 
+    self.logger.log_info(
+        "Session is finish - Stop_reason = {0}".format(stop_reason))
     r = r1
     return r
 
