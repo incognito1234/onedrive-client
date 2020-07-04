@@ -73,12 +73,14 @@ class TokenRecorder:
     """
         Record token
     """
-
     with open(self.filename, 'w') as tokenfile:
       json.dump(token, tokenfile)
       self.token = token
-
     return 1
+
+  def __refresh_token(self, token):
+    self.logger.log_info("Refresh token")
+    self.store_token(token)
 
   def token_exists(self):
     try:
@@ -124,3 +126,17 @@ class TokenRecorder:
 
     else:
       return None
+
+  def get_session_from_token(self):
+    refresh_params = {
+        'client_id': settings['app_id'],
+        'client_secret': settings['app_secret'],
+    }
+    client = OAuth2Session(settings['app_id'],
+                           token=self.token,
+                           scope=settings['scopes'],
+                           redirect_uri=settings['redirect'],
+                           auto_refresh_url=token_url,
+                           auto_refresh_kwargs=refresh_params,
+                           token_updater=self.__refresh_token)
+    return client

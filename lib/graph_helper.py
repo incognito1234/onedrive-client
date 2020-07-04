@@ -10,27 +10,20 @@ class MsGraphClient:
 
   graph_url = 'https://graph.microsoft.com/v1.0'
 
-  def __init__(self, token):
-    self.token = token
-    self.logger = Logger(None, 4)
-
-  def __init__(self, token, logger):
-    self.token = token
+  def __init__(self, mgc, logger):
+    self.mgc = mgc
     self.logger = logger
 
   def set_logger(self, logger):
     self.logger = logger
 
   def get_user(self):
-    graph_client = OAuth2Session(token=self.token)
     # Send GET to /me
-    user = graph_client.get('{0}/me'.format(MsGraphClient.graph_url))
+    user = self.mgc.get('{0}/me'.format(MsGraphClient.graph_url))
     # Return the JSON result
     return user.json()
 
   def get_calendar_events(self):
-    graph_client = OAuth2Session(token=self.token)
-
     # Configure query parameters to
     # modify the results
     query_params = {
@@ -39,7 +32,7 @@ class MsGraphClient:
     }
 
     # Send GET to /me/events
-    events = graph_client.get(
+    events = self.mgc.get(
         '{0}/me/events'.format(MsGraphClient.graph_url), params=query_params)
     # Return the JSON result
     return events.json()
@@ -47,7 +40,6 @@ class MsGraphClient:
   def get_ms_response_for_children_folder_path(self, folder_path):
     """ Get response value of ms graph for getting children info of a onedrive folder
     """
-    graph_client = OAuth2Session(token=self.token)
 
     if folder_path == '':
       fp = '{0}/me/drive/root/children'.format(MsGraphClient.graph_url)
@@ -55,7 +47,7 @@ class MsGraphClient:
       fp = '{0}/me/drive/root:/{1}:/children'.format(
           MsGraphClient.graph_url, folder_path)
 
-    ms_response = graph_client.get(fp)
+    ms_response = self.mgc.get(fp)
 
     if 'error' in ms_response:
       return None
@@ -69,8 +61,7 @@ class MsGraphClient:
 
   def download_file_content(self, itemid, local_filename):
     # Inspired from https://gist.github.com/mvpotter/9088499
-    graph_client = OAuth2Session(token=self.token)
-    r = graph_client.get('{0}/me/drive/items/{1}/content'.format(
+    r = self.mgc.get('{0}/me/drive/items/{1}/content'.format(
         MsGraphClient.graph_url, itemid
     ), stream=True)
     with open(local_filename, 'wb') as f:
@@ -81,14 +72,13 @@ class MsGraphClient:
     return 1
 
   def raw_command(self, cmd):
-    graph_client = OAuth2Session(token=self.token)
-    result = graph_client.get("{0}{1}".format(
+    result = self.mgc.get("{0}{1}".format(
         MsGraphClient.graph_url, cmd
     ))
     return result
 
   def put_file_content(self, dst_folder, src_file):
-    graph_client = OAuth2Session(token=self.token)
+
     self.logger.log(
         "Start put_file_content('{0}','{1}')".format(
             dst_folder, src_file), 4)
@@ -105,7 +95,7 @@ class MsGraphClient:
           'Content-Type': 'application/octet-stream'
       }
       print("url put file = {}".format(url))
-      r = graph_client.put(
+      r = self.mgc.put(
           url,
           data=open(src_file, 'rb'),
           headers=headers)
@@ -126,7 +116,7 @@ class MsGraphClient:
 
     # Initiate upload session
     data_json = json.dumps(data)
-    r1 = graph_client.post(
+    r1 = self.mgc.post(
         url,
         headers={
             'Content-Type': 'application/json'
@@ -183,12 +173,10 @@ class MsGraphClient:
           current_end = total_size - 1
         current_size = current_end - current_start + 1
 
-        r = graph_client.put(
+        r = self.mgc.put(
             uurl,
             headers=headers,
             data=current_stream)
-
-        # print("response = {0}".format(r.json()))
 
     # Close URL
     self.cancel_upload(uurl)
@@ -197,8 +185,6 @@ class MsGraphClient:
     return r
 
   def cancel_upload(self, upload_url):
-    graph_client = OAuth2Session(token=self.token)
-
-    r = graph_client.delete(upload_url)
+    r = self.mgc.delete(upload_url)
 
     return r

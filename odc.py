@@ -46,7 +46,7 @@ if __name__ == '__main__':
     print("please connect first with mgcli init")
     quit()
 
-  mgc = MsGraphClient(tr.get_token(), lg)
+  mgc = MsGraphClient(tr.get_session_from_token(), lg)
   if args["get_user"]:
     user = mgc.get_user()
     print(
@@ -125,9 +125,7 @@ if 1 == 0:
     token = get_token_from_code(url, state)
     tr.store_token(token)
 
-  tk = tr.get_token()
-
-  mgc = MsGraphClient(tk)
+  mgc = MsGraphClient(tr)
 
   # Export file list from one folder
   children = mgc.get_folder_children('Photos/201804-Ethiopie/')
