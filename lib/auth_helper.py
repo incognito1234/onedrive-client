@@ -128,6 +128,7 @@ class TokenRecorder:
       return None
 
   def get_session_from_token(self):
+    self.logger.log_debug("Get session from token starting")
     refresh_params = {
         'client_id': settings['app_id'],
         'client_secret': settings['app_secret'],
