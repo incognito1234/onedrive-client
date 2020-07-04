@@ -4,10 +4,10 @@
   Usage:
     odc init
     odc upload <srcfile> <dstfolder> [--logfile=<logfile>]
-    odc get_user
+    odc get_user [--logfile=<logfile>]
     odc get_children <folder>
     odc raw_cmd
-    odc browse
+    odc browse [--logfile=<logfile>]
 
   Options:
     <srcfile>    Source file
