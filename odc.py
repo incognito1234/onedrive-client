@@ -3,15 +3,18 @@
 
   Usage:
     odc init
-    odc upload <srcfile> <dstfolder> [--logfile=<logfile>]
+    odc upload <srcfile> <dstremotefolder> [--logfile=<logfile>]
     odc get_user [--logfile=<logfile>]
     odc get_children <folder>
     odc raw_cmd
     odc browse [--logfile=<logfile>]
+    odc download <remotefile> <dstlocalpath> [--logfile=<logfile>]
 
   Options:
-    <srcfile>    Source file
-    <dstfolder>  Destination folder
+    <srcfile>          Source file
+    <dstremotefolder>  Destination folder
+    <remotefile>       Remote file
+    <dstlocalpath>     Destination local path (folder or file)
 """
 from lib.auth_helper import get_sign_in_url, get_token_from_code, TokenRecorder
 from lib.graph_helper import MsGraphClient
@@ -64,7 +67,7 @@ if __name__ == '__main__':
     # Upload a file
 
     r = mgc.put_file_content(
-        args["<dstfolder>"],
+        args["<dstremotefolder>"],
         args["<srcfile>"]
     )
 
@@ -78,6 +81,12 @@ if __name__ == '__main__':
       print(result)
       print(result.json())
       print("  ")
+
+  if args["download"]:
+    r = mgc.download_file_content(
+        args["<remotefile>"],
+        args["<dstlocalpath>"]
+    )
 
   if args["browse"]:
 
