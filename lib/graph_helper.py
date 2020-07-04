@@ -79,12 +79,14 @@ class MsGraphClient:
 
   def put_file_content(self, dst_folder, src_file):
 
-    self.logger.log(
+    self.logger.log_debug(
         "Start put_file_content('{0}','{1}')".format(
-            dst_folder, src_file), 4)
+            dst_folder, src_file))
+    total_size = os.path.getsize(src_file)
+    self.logger.log_debug("File size = {0}".format(total_size))
     file_name = src_file.split("/").pop()
     # For file size < 4Mb
-    if 1 == 0:
+    if total_size < (1048576 * 4):
       url = '{0}/me/drive/root:/{1}/{2}:/content'.format(
           MsGraphClient.graph_url,
           dst_folder,
@@ -94,97 +96,100 @@ class MsGraphClient:
           # 'Content-Type' : 'text/plain'
           'Content-Type': 'application/octet-stream'
       }
-      print("url put file = {}".format(url))
+      self.logger.log_debug("url put file = {}".format(url))
       r = self.mgc.put(
           url,
           data=open(src_file, 'rb'),
           headers=headers)
 
-    # For file size > 4 Mb
-    # https://docs.microsoft.com/fr-fr/graph/api/driveitem-createuploadsession?view=graph-rest-1.0
-    url = '{0}/me/drive/root:/{1}/{2}:/createUploadSession'.format(
-        MsGraphClient.graph_url,
-        dst_folder,
-        file_name
-    )
-    data = {
-        "item": {
-            "@odata.type": "microsoft.graph.driveItemUploadableProperties",
-            "@microsoft.graph.conflictBehavior": "replace"
-        }
-    }
+      return r
 
-    # Initiate upload session
-    data_json = json.dumps(data)
-    r1 = self.mgc.post(
-        url,
-        headers={
-            'Content-Type': 'application/json'
-        },
-        data=data_json
-    )
-    r1_json = r1.json()
-    uurl = r1_json["uploadUrl"]
-
-    # Upload parts of file
-    total_size = os.path.getsize(src_file)
-    self.logger.log_debug("total_size = {0:,}".format(total_size))
-
-    CHUNK_SIZE = 1048576 * 20  # 20 MB
-    current_start = 0
-
-    if total_size >= current_start + CHUNK_SIZE:
-      current_end = current_start + CHUNK_SIZE - 1
     else:
-      current_end = total_size - 1
-    current_size = current_end - current_start + 1
+      # For file size > 4 Mb
+      # https://docs.microsoft.com/fr-fr/graph/api/driveitem-createuploadsession?view=graph-rest-1.0
+      url = '{0}/me/drive/root:/{1}/{2}:/createUploadSession'.format(
+          MsGraphClient.graph_url,
+          dst_folder,
+          file_name
+      )
+      data = {
+          "item": {
+              "@odata.type": "microsoft.graph.driveItemUploadableProperties",
+              "@microsoft.graph.conflictBehavior": "replace"
+          }
+      }
 
-    stop_reason = "OK"
-    with open(src_file, 'rb') as fin:
-      i = 0
-      while True:
-        current_stream = fin.read(current_size)
+      # Initiate upload session
+      data_json = json.dumps(data)
+      r1 = self.mgc.post(
+          url,
+          headers={
+              'Content-Type': 'application/json'
+          },
+          data=data_json
+      )
+      r1_json = r1.json()
+      uurl = r1_json["uploadUrl"]
 
-        if not current_stream:
-          stop_reason = "end_of_stream"
-          break
-        if current_start > total_size:
-          stop_reason = "current_size_oversized"
-          break
-        if i > 2000:
-          stop_reason = "exceed_number_of_loop"
-          break
+      # Upload parts of file
+      total_size = os.path.getsize(src_file)
+      self.logger.log_debug("total_size = {0:,}".format(total_size))
 
-        self.logger.log_debug(
-            "{0} start/end/size/total - {1:>15,}{2:>15,}{3:>15,}{4:>15,}".format(
-                i, current_start, current_end, current_size, total_size))
+      CHUNK_SIZE = 1048576 * 20  # 20 MB
+      current_start = 0
 
-        i = i + 1
+      if total_size >= current_start + CHUNK_SIZE:
+        current_end = current_start + CHUNK_SIZE - 1
+      else:
+        current_end = total_size - 1
+      current_size = current_end - current_start + 1
 
-        headers = {
-            'Content-Length': "{0}".format(current_size),
-            'Content-Range': "bytes {0}-{1}/{2}".format(current_start, current_end, total_size)
-        }
+      stop_reason = "OK"
+      with open(src_file, 'rb') as fin:
+        i = 0
+        while True:
+          current_stream = fin.read(current_size)
 
-        current_start = current_end + 1
-        if total_size >= current_start + CHUNK_SIZE:
-          current_end = current_start + CHUNK_SIZE - 1
-        else:
-          current_end = total_size - 1
-        current_size = current_end - current_start + 1
+          if not current_stream:
+            stop_reason = "end_of_stream"
+            break
+          if current_start > total_size:
+            stop_reason = "current_size_oversized"
+            break
+          if i > 2000:
+            stop_reason = "exceed_number_of_loop"
+            break
 
-        r = self.mgc.put(
-            uurl,
-            headers=headers,
-            data=current_stream)
+          self.logger.log_debug(
+              "{0} start/end/size/total - {1:>15,}{2:>15,}{3:>15,}{4:>15,}".format(
+                  i, current_start, current_end, current_size, total_size))
 
-    # Close URL
-    self.cancel_upload(uurl)
+          i = i + 1
 
-    self.logger.log_info(
-        "Session is finish - Stop_reason = {0}".format(stop_reason))
-    r = r1
-    return r
+          headers = {
+              'Content-Length': "{0}".format(current_size),
+              'Content-Range': "bytes {0}-{1}/{2}".format(current_start, current_end, total_size)
+          }
+
+          current_start = current_end + 1
+          if total_size >= current_start + CHUNK_SIZE:
+            current_end = current_start + CHUNK_SIZE - 1
+          else:
+            current_end = total_size - 1
+          current_size = current_end - current_start + 1
+
+          r = self.mgc.put(
+              uurl,
+              headers=headers,
+              data=current_stream)
+
+      # Close URL
+      self.cancel_upload(uurl)
+
+      self.logger.log_info(
+          "Session is finish - Stop_reason = {0}".format(stop_reason))
+      r = r1
+      return r
 
   def cancel_upload(self, upload_url):
     r = self.mgc.delete(upload_url)
