@@ -219,5 +219,4 @@ class MsGraphClient:
       return (r['error']['code'], None)
 
     mso = MsObject.MsObjectFromMgcResponse(self.mgc, r)
-    pprint.pprint(r)
     return (None, mso)

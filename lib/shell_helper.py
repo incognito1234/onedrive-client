@@ -1,4 +1,4 @@
-
+from lib.datetime_helper import str_from_ms_datetime
 from abc import ABC, abstractmethod
 
 
@@ -17,6 +17,10 @@ class MsObject(ABC):
   @property
   @abstractmethod
   def name():
+    pass
+
+  @abstractmethod
+  def str_full_details(self):
     pass
 
   @property
@@ -41,9 +45,13 @@ class MsObject(ABC):
     else:
       return MsFileInfo(
           mgc_response_json['name'],
+          mgc_response_json['parentReference']['path'][13:],
           mgc,
           mgc_response_json['id'],
-          mgc_response_json['size'])
+          mgc_response_json['size'],
+          mgc_response_json['file']['hashes']['quickXorHash'],
+          str_from_ms_datetime(mgc_response_json['fileSystemInfo']['createdDateTime']),
+          str_from_ms_datetime(mgc_response_json['fileSystemInfo']['lastModifiedDateTime']))
 
 
 class MsFolderInfo(MsObject):
@@ -100,7 +108,15 @@ class MsFolderInfo(MsObject):
           )
           self.add_folder(fi)
         else:
-          fi = MsFileInfo(c['name'], self.__mgc, c['id'], c['size'])
+          fi = MsFileInfo(
+              c['name'],
+              self.path,
+              self.__mgc,
+              c['id'],
+              c['size'],
+              None,
+              None,
+              None)
           self.add_file(fi)
 
       self.close_init()
@@ -145,17 +161,26 @@ class MsFolderInfo(MsObject):
                                                   [1:], self.child_count)
     return result
 
+  def str_full_details(self):
+    result = ("Folder {0}"
+              "test").format(self.get_full_path()[1:])
+    return result
+
 
 class MsFileInfo(MsObject):
-  def __init__(self, name, mgc, file_id, size):
+  def __init__(self, name, parent_path, mgc, file_id, size, qxh, cdt, lmdt):
+    # qxh = quickxorhash
     self.mgc = mgc
     self.__name = name
+    self.__parent_path = parent_path
     self.__id = file_id
     self.size = size
+    self.qxh = qxh
+    self.creation_datetime = cdt
+    self.last_modified_datetime = lmdt
 
   def _get_path(self):
-    super._get_path()
-    return self.name
+    return "/{0}/{1}".format(self.__parent_path, self.__name)
   path = property(_get_path)
 
   def _get_id(self):
@@ -172,4 +197,26 @@ class MsFileInfo(MsObject):
         self.__id,
         self.size
     )
+    return result
+
+  def str_full_details(self):
+    result = (
+        "File - '{0}'\n"
+        "  name                  = {1}\n"
+        "  full_path             = {2}\n"
+        "  id                    = {3:>20}\n"
+        "  size                  = {4:,}\n"
+        "  quickXorHash          = {5}\n"
+        "  creationDateTime      = {6}\n"
+        "  lastModifiedDateTime  = {7}"
+    ).format(
+        self.name,
+        self.name,
+        self.path,
+        self.__id,
+        self.size,
+        self.qxh,
+        self.creation_datetime,
+        self.last_modified_datetime)
+
     return result

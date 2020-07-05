@@ -94,7 +94,7 @@ if __name__ == '__main__':
 
   if args["get_object_info"]:
     r = mgc.get_object_info(args["<dstremotepath>"])
-    print(r[1])
+    print(r[1].str_full_details())
 
   if args["browse"]:
 
