@@ -10,6 +10,7 @@
     odc browse [--logfile=<logfile>]
     odc download <remotefile> <dstlocalpath> [--logfile=<logfile>]
     odc get_object_info <dstremotepath>
+    odc qxh <srcfile>
 
   Options:
     <srcfile>          Source file
@@ -20,6 +21,7 @@
 """
 from lib.auth_helper import get_sign_in_url, get_token_from_code, TokenRecorder
 from lib.graph_helper import MsGraphClient
+from lib.check_helper import hash_of_file
 import pprint
 from docopt import docopt
 from lib.shell_helper import MsFolderInfo
@@ -126,6 +128,8 @@ if __name__ == '__main__':
         print(">>>>> ERROR >>>>>>>> Invalid command <<<<<<<<<<<")
       print("")
 
+  if args["qxh"]:
+    print(hash_of_file(args["<srcfile>"]))
 
 if 1 == 0:
   # Initialization of token
