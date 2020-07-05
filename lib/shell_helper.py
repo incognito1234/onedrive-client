@@ -50,6 +50,7 @@ class MsObject(ABC):
           mgc_response_json['id'],
           mgc_response_json['size'],
           mgc_response_json['file']['hashes']['quickXorHash'],
+          mgc_response_json['file']['hashes']['sha1Hash'],
           str_from_ms_datetime(mgc_response_json['fileSystemInfo']['createdDateTime']),
           str_from_ms_datetime(mgc_response_json['fileSystemInfo']['lastModifiedDateTime']))
 
@@ -116,6 +117,7 @@ class MsFolderInfo(MsObject):
               c['size'],
               None,
               None,
+              None,
               None)
           self.add_file(fi)
 
@@ -168,13 +170,24 @@ class MsFolderInfo(MsObject):
 
 
 class MsFileInfo(MsObject):
-  def __init__(self, name, parent_path, mgc, file_id, size, qxh, cdt, lmdt):
+  def __init__(
+          self,
+          name,
+          parent_path,
+          mgc,
+          file_id,
+          size,
+          qxh,
+          s1h,
+          cdt,
+          lmdt):
     # qxh = quickxorhash
     self.mgc = mgc
     self.__name = name
     self.__parent_path = parent_path
     self.__id = file_id
     self.size = size
+    self.sha1hash = s1h
     self.qxh = qxh
     self.creation_datetime = cdt
     self.last_modified_datetime = lmdt
@@ -207,8 +220,9 @@ class MsFileInfo(MsObject):
         "  id                    = {3:>20}\n"
         "  size                  = {4:,}\n"
         "  quickXorHash          = {5}\n"
-        "  creationDateTime      = {6}\n"
-        "  lastModifiedDateTime  = {7}"
+        "  sha1Hash              = {6}\n"
+        "  creationDateTime      = {7}\n"
+        "  lastModifiedDateTime  = {8}"
     ).format(
         self.name,
         self.name,
@@ -216,6 +230,7 @@ class MsFileInfo(MsObject):
         self.__id,
         self.size,
         self.qxh,
+        self.sha1hash,
         self.creation_datetime,
         self.last_modified_datetime)
 
