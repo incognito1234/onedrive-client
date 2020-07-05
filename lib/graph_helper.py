@@ -74,7 +74,6 @@ class MsGraphClient:
 
     CHUNK_SIZE = 1048576 * 20  # 20 MB
     start = 0
-    self.logger.log_debug(r.json())
     with open(local_filepath, 'wb') as f:
       for chunk in r.iter_content(chunk_size=CHUNK_SIZE):
         if chunk:  # filter out keep-alive new chunks
@@ -220,4 +219,5 @@ class MsGraphClient:
       return (r['error']['code'], None)
 
     mso = MsObject.MsObjectFromMgcResponse(self.mgc, r)
+    pprint.pprint(r)
     return (None, mso)
