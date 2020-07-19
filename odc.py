@@ -9,12 +9,16 @@ import pprint
 from lib.log import Logger
 from lib.args_helper import parse_odc_args
 from lib.action_helper import action_get_user, action_get_children, action_upload, action_raw_cmd, action_download, action_get_info, action_browse, action_qxh
+from lib.file_config_helper import create_and_get_config_folder, force_permission_file_read_write_owner
 import os
 import sys
 
 if __name__ == '__main__':
 
-  current_dirname = os.path.dirname(os.path.realpath(__file__))
+  config_dirname = create_and_get_config_folder()
+  if config_dirname is None:
+    exit(0)
+
   args = parse_odc_args()
 
   if args.logfile is not None:
@@ -22,7 +26,9 @@ if __name__ == '__main__':
   else:
     lg = Logger(None, None)
 
-  tr = TokenRecorder("{0}/.token.json".format(current_dirname), lg)
+  token_file_name = "{0}/.token.json".format(config_dirname)
+  force_permission_file_read_write_owner(token_file_name)
+  tr = TokenRecorder(token_file_name, lg)
 
   if args.command == 'init':
     sign_in_url, state = get_sign_in_url()
