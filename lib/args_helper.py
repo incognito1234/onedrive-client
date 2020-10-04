@@ -62,6 +62,13 @@ def parse_odc_args():
       'dstremotepath',
       type=str,
       help='destination object')
+
+  parser_remove = sub_parsers.add_parser(
+      'remove',
+      help='remove a file',
+      description='Return 1 = OK. 0 = KO. 2 = Unknown')
+  parser_remove.add_argument('filepath', type=str, help='remote file')
+
   result = parser.parse_args()
 
   return result

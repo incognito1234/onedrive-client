@@ -43,6 +43,11 @@ def action_download(mgc, remote_file, dst_local_path):
   )
 
 
+def action_remove(mgc, file_path):
+  r = mgc.delete_file(file_path)
+  exit(r)
+
+
 def action_get_info(mgc, remote_path):
   r = mgc.get_object_info(remote_path)
   print(r[1].str_full_details())

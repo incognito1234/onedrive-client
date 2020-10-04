@@ -86,6 +86,17 @@ class MsGraphClient:
 
     return 1
 
+  def delete_file(self, file_path):
+    r = self.mgc.delete('{0}/me/drive/root:/{1}:'.format(
+        MsGraphClient.graph_url, file_path
+    ))
+    if r.status_code == 404:
+      return 0      # File not found
+    elif r.status_code == 204:
+      return 1      # OK
+    else:
+      return 2      # ??
+
   def raw_command(self, cmd):
     result = self.mgc.get("{0}{1}".format(
         MsGraphClient.graph_url, cmd
