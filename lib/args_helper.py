@@ -10,6 +10,7 @@
     odc browse [--logfile=<logfile>]
     odc download <remotefile> <dstlocalpath> [--logfile=<logfile>]
     odc get_info  <dstremotepath>
+    odc remove <filepath>
     odc qxh <srcfile>
 
   Options:
@@ -68,6 +69,10 @@ def parse_odc_args():
       help='remove a file',
       description='Return 1 = OK. 0 = KO. 2 = Unknown')
   parser_remove.add_argument('filepath', type=str, help='remote file')
+
+  parser_quickxorhash = sub_parsers.add_parser(
+      'qxh', help='compute quickxorhash of file')
+  parser_quickxorhash.add_argument('srcfile', type=str, help='source file')
 
   result = parser.parse_args()
 

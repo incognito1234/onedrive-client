@@ -1,4 +1,4 @@
-from lib.check_helper import hash_of_file
+from lib.check_helper import quickxorhash
 from lib.shell_helper import MsFolderInfo
 
 
@@ -86,4 +86,5 @@ def action_browse(mgc):
 
 
 def action_qxh(src_file):
-  print(hash_of_file(src_file))
+  qxh = quickxorhash()
+  print(qxh.quickxorhash(src_file))
