@@ -32,33 +32,17 @@ class MsObject(ABC):
     if ('folder' in mgc_response_json):
       # import pprint
       # pprint.pprint(mgc_response_json)
-      result = MsFolderInfo(
-          "{0}/{1}".format(
-              mgc_response_json['parentReference']['path'][12:],
-              mgc_response_json['name']),
-          mgc,
-          id=mgc_response_json['id'],
-          child_count=mgc_response_json['folder']['childCount'],
-          size=mgc_response_json['size']
-      )
+      result = MsFolderInfo.MsFolderFromMgcResponse(mgc, mgc_response_json)
       return result
     else:
-      return MsFileInfo(
-          mgc_response_json['name'],
-          mgc_response_json['parentReference']['path'][13:],
-          mgc,
-          mgc_response_json['id'],
-          mgc_response_json['size'],
-          mgc_response_json['file']['hashes']['quickXorHash'],
-          mgc_response_json['file']['hashes']['sha1Hash'],
-          str_from_ms_datetime(mgc_response_json['fileSystemInfo']['createdDateTime']),
-          str_from_ms_datetime(mgc_response_json['fileSystemInfo']['lastModifiedDateTime']))
+      return MsFileInfo.MsFileInfoFromMgcResponse(mgc, mgc_response_json)
 
 
 class MsFolderInfo(MsObject):
 
   def __init__(
           self,
+          name,
           full_path,
           mgc,
           id=0,
@@ -71,13 +55,16 @@ class MsFolderInfo(MsObject):
     """
     self.__id = id
     self.__full_path = full_path
+    self.__name = name
     self.__mgc = mgc
     self.children_file = []
     self.children_folder = []
     self.parent = parent
     self.child_count = child_count
     self.size = size
-    self.__children_retrieval_info = "only_name"
+
+    self.__children_files_retrieval_status = None
+    self.__children_folders_retrieval_status = None
 
   def get_full_path(self):
     return self.__full_path
@@ -88,58 +75,77 @@ class MsFolderInfo(MsObject):
   id = property(_get_id)
 
   def _get_name(self):
-    return self.get_full_path()
+    return self.__name
   name = property(_get_name)
 
-  def retrieve_children_info(self):
-    if not self.children_has_been_retrieved():
+  def retrieve_children_info(
+          self,
+          only_folders=False,
+          recursive=False,
+          depth=999):
+    self.__mgc.logger.log_debug(
+        "[retrieve_children_info] {0} - only_folders = {1} - depth = {2}".format(
+            self.get_full_path(), only_folders, depth))
+    if depth > 0 and (
+        only_folders and not self.folders_have_been_retrieved()
+        or not self.files_have_been_retrieved() or not self.folders_have_been_retrieved()
+    ):
+
       ms_response = self.__mgc.get_ms_response_for_children_folder_path(
-          self.get_full_path())
+          self.get_full_path(), only_folders)
+
+      self.__children_folders_retrieval_status = "in_progress"
+
+      if not only_folders:
+        self.__children_files_retrieval_status = "in_progress"
+
       for c in ms_response:
         isFolder = 'folder' in c
         if isFolder:
-          fi = MsFolderInfo("{0}/{1}".format(
-              self.get_full_path(),
-              c['name']),
-              self.__mgc,
-              id=c['id'],
-              child_count=c['folder']['childCount'],
-              size=c['size'],
-              parent=self
-          )
+          fi = MsFolderInfo.MsFolderFromMgcResponse(self.__mgc, c, self)
           self.add_folder(fi)
-        else:
-          fi = MsFileInfo(
-              c['name'],
-              self.path,
-              self.__mgc,
-              c['id'],
-              c['size'],
-              None,
-              None,
-              None,
-              None)
-          self.add_file(fi)
+          if recursive:
+            fi.retrieve_children_info(
+                only_folders=only_folders,
+                recursive=recursive,
+                depth=depth - 1)
 
-      self.close_init()
+        elif not only_folders:
+          fi = MsFileInfo.MsFileInfoFromMgcResponse(self.__mgc, c)
+          self.add_file(fi)
+        else:
+          self.__mgc.Logger.log_info(
+              "retrieve_children_info : UNKNOWN RESPONSE")
+
+      self.__mgc.logger.log_debug(
+          "[retrieve_children_info] {0} - setting retrieval status".format(self.get_full_path()))
+
+      if not only_folders:
+        self.__children_files_retrieval_status = "all"
+
+      self.__children_folders_retrieval_status = "all"
 
   def add_folder(self, folder_info):
     self.children_folder.append(folder_info)
-    self.__children_retrieval_info = "child_in_progress"
 
   def add_file(self, file_info):
     self.children_file.append(file_info)
-    self.__children_retrieval_info = "child_in_progress"
 
-  def close_init(self):
-    self.__children_retrieval_info = "children"
+  def files_have_been_retrieved(self):
+    return self.__children_files_retrieval_status == "all"
 
-  def children_has_been_retrieved(self):
-    return self.__children_retrieval_info == "children"
+  def folders_have_been_retrieved(self):
+    return self.__children_folders_retrieval_status == "all"
 
-  def print_children(self, start_number=0):
-    if not self.children_has_been_retrieved():
-      self.retrieve_children_info()
+  def print_children(self, start_number=0, recursive=False, depth=999):
+    if not self.folders_have_been_retrieved():
+      self.__mgc.logger.log_debug(
+          "[print_children] folder_path = {0} - folders have not been retrieved".format(
+              self.get_full_path()))
+      self.retrieve_children_info(
+          only_folders=False,
+          recursive=recursive,
+          depth=depth)
     i = start_number
     for c in self.children_folder:
       print("{0:>3} - {1}".format(
@@ -148,14 +154,23 @@ class MsFolderInfo(MsObject):
       ))
       i = i + 1
     for c in self.children_file:
-      # print("{0:>3} - {1}".format(
-      #   i,
-      #   c
-      # ))
+      print("{0:>3} - {1}".format(
+          i,
+          c
+      ))
       i = i + 1
 
+    if recursive and depth > 0:
+      for c in self.children_folder:
+        nb_children = c.print_children(
+            start_number=i, recursive=False, depth=depth - 1)
+
+        i += nb_children
+
+    return i - start_number
+
   def __str__(self):
-    if not self.children_has_been_retrieved():
+    if not self.folders_have_been_retrieved():
       result = "Folder - {0}/ ({1} - {2:,})".format(self.get_full_path()
                                                     [1:], self.child_count, self.size)
     else:
@@ -163,9 +178,26 @@ class MsFolderInfo(MsObject):
                                                   [1:], self.child_count)
     return result
 
+  def MsFolderFromMgcResponse(mgc, mgc_response_json, parent=None):
+    return MsFolderInfo(
+        full_path="{0}/{1}".format(
+            mgc_response_json['parentReference']['path'][12:],
+            mgc_response_json['name']),
+        name=mgc_response_json['name'],
+        mgc=mgc,
+        id=mgc_response_json['id'],
+        child_count=mgc_response_json['folder']['childCount'],
+        size=mgc_response_json['size'],
+        parent=parent
+    )
+
   def str_full_details(self):
-    result = ("Folder {0}"
-              "test").format(self.get_full_path()[1:])
+    result = ("Folder {0}\n"
+              "name = {1}").format(
+        self.get_full_path()[1:],
+        self.name
+    )
+
     return result
 
 
@@ -205,12 +237,29 @@ class MsFileInfo(MsObject):
   name = property(_get_name)
 
   def __str__(self):
-    result = "File - {0:35} - {1:>25} - {2:>20,}".format(
-        self.name,
+    result = "File - {0:35} - {1:>25} - {2:>20,} - {3}".format(
+        self.path,
         self.__id,
-        self.size
+        self.size,
+        self.last_modified_datetime
     )
     return result
+
+  def MsFileInfoFromMgcResponse(mgc, mgc_response_json):
+    if 'quickXorHash' in mgc_response_json['file']['hashes']:
+      qxh = mgc_response_json['file']['hashes']['quickXorHash']
+    else:
+      qxh = None
+    return MsFileInfo(mgc_response_json['name'],
+                      mgc_response_json['parentReference']['path'][13:],
+                      mgc,
+                      mgc_response_json['id'],
+                      mgc_response_json['size'],
+                      qxh,
+                      mgc_response_json['file']['hashes']['sha1Hash'],
+                      str_from_ms_datetime(mgc_response_json['fileSystemInfo']['createdDateTime']),
+                      str_from_ms_datetime(mgc_response_json['fileSystemInfo']['lastModifiedDateTime'])
+                      )
 
   def str_full_details(self):
     result = (

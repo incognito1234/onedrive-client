@@ -37,7 +37,8 @@ class MsGraphClient:
     # Return the JSON result
     return events.json()
 
-  def get_ms_response_for_children_folder_path(self, folder_path):
+  def get_ms_response_for_children_folder_path(
+          self, folder_path, only_folder=False):
     """ Get response value of ms graph for getting children info of a onedrive folder
     """
 
@@ -47,7 +48,13 @@ class MsGraphClient:
       fp = '{0}/me/drive/root:/{1}:/children'.format(
           MsGraphClient.graph_url, folder_path)
 
-    ms_response = self.mgc.get(fp)
+    if only_folder:
+      param_urls = {
+          '$filter': 'folder ne any',
+          '$select': 'name,folder,id,size'}
+    else:
+      param_urls = ()
+    ms_response = self.mgc.get(fp, params=param_urls)
 
     if 'error' in ms_response:
       return None
@@ -77,12 +84,14 @@ class MsGraphClient:
     with open(local_filepath, 'wb') as f:
       for chunk in r.iter_content(chunk_size=CHUNK_SIZE):
         if chunk:  # filter out keep-alive new chunks
-          self.logger.log_info("Downloading from {0}".format(start))
+          self.logger.log_info(
+              "[download_file_content] Downloading {0} from {1}".format(
+                  dst_path, start))
           f.write(chunk)
           f.flush()
           start = start + CHUNK_SIZE
     self.logger.log_info(
-        "Download of file '{0}' to '{1}' - OK".format(dst_path, local_dst))
+        "[download_file_content] Download of file '{0}' to '{1}' - OK".format(dst_path, local_dst))
 
     return 1
 
@@ -228,6 +237,5 @@ class MsGraphClient:
     )).json()
     if 'error' in r:
       return (r['error']['code'], None)
-
-    mso = MsObject.MsObjectFromMgcResponse(self.mgc, r)
+    mso = MsObject.MsObjectFromMgcResponse(self, r)
     return (None, mso)

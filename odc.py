@@ -8,7 +8,13 @@ from lib.graph_helper import MsGraphClient
 import pprint
 from lib.log import Logger
 from lib.args_helper import parse_odc_args
-from lib.action_helper import action_get_user, action_get_children, action_upload, action_raw_cmd, action_download, action_get_info, action_browse, action_qxh, action_remove, action_qxh
+from lib.action_helper import (
+    action_get_user,
+    action_get_children, action_upload, action_raw_cmd,
+    action_download, action_mdownload,
+    action_get_info,
+    action_browse, action_qxh, action_remove
+)
 from lib.file_config_helper import create_and_get_config_folder, force_permission_file_read_write_owner
 import os
 import sys
@@ -60,6 +66,9 @@ if __name__ == '__main__':
 
   if args.command == "download":
     action_download(mgc, args.remotefile, args.dstlocalpath)
+
+  if args.command == "mdownload":
+    action_mdownload(mgc, args.remotefolder, args.dstlocalpath, args.depth)
 
   if args.command == "remove":
     action_remove(mgc, args.filepath)

@@ -9,8 +9,9 @@
     odc raw_cmd
     odc browse [--logfile=<logfile>]
     odc download <remotefile> <dstlocalpath> [--logfile=<logfile>]
-    odc get_info  <dstremotepath>
+    odc mdownload <folderpath>
     odc remove <filepath>
+    odc get_info  <dstremotepath>
     odc qxh <srcfile>
 
   Options:
@@ -56,6 +57,23 @@ def parse_odc_args():
       'dstlocalpath',
       type=str,
       help='destination path where file will be downloaded')
+
+  parser_mdownload = sub_parsers.add_parser(
+      'mdownload', help='download a complete folder')
+  parser_mdownload.add_argument(
+      'remotefolder',
+      type=str,
+      help='folder to be downloaded')
+  parser_mdownload.add_argument(
+      'dstlocalpath',
+      type=str,
+      help='local destination path')
+  parser_mdownload.add_argument(
+      '--depth',
+      '-d',
+      type=int,
+      help='maximum depth',
+      default=999)
 
   parser_get_info = sub_parsers.add_parser(
       'get_info', help='get info from object')

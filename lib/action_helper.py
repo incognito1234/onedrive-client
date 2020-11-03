@@ -1,5 +1,6 @@
 from lib.check_helper import quickxorhash
 from lib.shell_helper import MsFolderInfo
+from lib.bulk_helper import bulk_folder_download
 
 
 def action_get_user(mgc):
@@ -43,6 +44,13 @@ def action_download(mgc, remote_file, dst_local_path):
   )
 
 
+def action_mdownload(mgc, folder_path, dest_path, max_depth):
+  mgc.logger.log_debug("action_mdownload - folder = '{0}' - depth = '{1}'".format(
+      folder_path, max_depth
+  ))
+  bulk_folder_download(mgc, folder_path, dest_path, max_depth)
+
+
 def action_remove(mgc, file_path):
   r = mgc.delete_file(file_path)
   exit(r)
@@ -55,7 +63,7 @@ def action_get_info(mgc, remote_path):
 
 def action_browse(mgc):
   # current_folder_info = mgc.get_folder_info("")
-  current_folder_info = MsFolderInfo("", mgc)
+  current_folder_info = MsFolderInfo("", "", mgc)
   while True:
 
     if current_folder_info.parent is not None:
