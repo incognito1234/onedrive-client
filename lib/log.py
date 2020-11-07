@@ -16,18 +16,19 @@ class Logger:
   LOG_LEVEL_ERROR = 1
   LOG_LEVEL_NONE = 0
 
-  def __init__(self, filename, loglevel):
+  def __init__(self, filename, loglevel, with_stdout=False):
     self.filename = filename
     if loglevel is None:
-      self.loglevel = Logger(None, 4)
+      self.loglevel = 0
     else:
       self.loglevel = loglevel
+    self.with_stdout = with_stdout
 
   def log(self, what, level):
     """
         Log something according to level
     """
-    if self.filename is None:
+    if self.filename is None and not self.with_stdout:
       return 0
 
     if level <= self.loglevel:
@@ -40,12 +41,14 @@ class Logger:
 
       tobelogged = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
       tobelogged += " - " + fts_loglevel[level]
-      tobelogged += " - " + what + "\n"
-      F = open(self.filename, "a")
+      tobelogged += " - " + what
 
-      F.write(tobelogged)
-
-      F.close()
+      if self.filename is not None:
+        F = open(self.filename, "a")
+        F.write(tobelogged + "\n")
+        F.close()
+      if self.with_stdout:
+        print(tobelogged)
     return 1
 
   def log_debug(self, what):

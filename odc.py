@@ -28,9 +28,12 @@ if __name__ == '__main__':
   args = parse_odc_args()
 
   if args.logfile is not None:
-    lg = Logger(args.logfile, Logger.LOG_LEVEL_DEBUG)
+    lg = Logger(args.logfile,
+                args.loglevel,
+                with_stdout=args.logstdout
+                )
   else:
-    lg = Logger(None, None)
+    lg = Logger(None, args.loglevel, with_stdout=args.logstdout)
 
   token_file_name = "{0}/.token.json".format(config_dirname)
   force_permission_file_read_write_owner(token_file_name)

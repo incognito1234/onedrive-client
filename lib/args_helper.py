@@ -36,6 +36,16 @@ def parse_odc_args():
       type=str,
       help='log file',
       default=None)
+  parser.add_argument(
+      '--logstdout',
+      help='print log to stdout',
+      action="store_true",
+      default=False)
+  parser.add_argument(
+      '--loglevel',
+      type=int,
+      help='log level (default = WARN)',
+      default=2)
   sub_parsers = parser.add_subparsers(dest='command')
 
   parser_init = sub_parsers.add_parser('init', help='init token')
