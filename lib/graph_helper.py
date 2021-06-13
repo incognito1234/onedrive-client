@@ -45,7 +45,7 @@ class MsGraphClient:
     if folder_path == '':
       fp = '{0}/me/drive/root/children'.format(MsGraphClient.graph_url)
     else:
-      fp = '{0}/me/drive/root:/{1}:/children'.format(
+      fp = '{0}/me/drive/root:{1}:/children'.format(
           MsGraphClient.graph_url, folder_path)
 
     if only_folder:
