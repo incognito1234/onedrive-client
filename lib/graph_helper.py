@@ -42,18 +42,19 @@ class MsGraphClient:
     """ Get response value of ms graph for getting children info of a onedrive folder
     """
 
+    # folder_path must start with '/'
     if folder_path == '':
       fp = '{0}/me/drive/root/children'.format(MsGraphClient.graph_url)
     else:
       fp = '{0}/me/drive/root:{1}:/children'.format(
           MsGraphClient.graph_url, folder_path)
-
     if only_folder:
       param_urls = {
           '$filter': 'folder ne any',
           '$select': 'name,folder,id,size'}
     else:
       param_urls = ()
+
     ms_response = self.mgc.get(fp, params=param_urls)
 
     if 'error' in ms_response:
@@ -114,7 +115,7 @@ class MsGraphClient:
 
   def put_file_content(self, dst_folder, src_file):
 
-    self.logger.log_debug(
+    self.logger.log_info(
         "Start put_file_content('{0}','{1}')".format(
             dst_folder, src_file))
     total_size = os.path.getsize(src_file)
@@ -217,6 +218,28 @@ class MsGraphClient:
               uurl,
               headers=headers,
               data=current_stream)
+
+          if r.status_code not in (202, 200):  # Accepted or OK
+            self.logger.log_error(
+                "Error during uploading. uploaded range: {0}->{1}. status_code : {2}".format(
+                    current_start, current_end, r.status_code))
+            # r is a object with type 'request.response' which is not serializable as json - an error is raised
+            # 'TypeError: Object of type 'Response' is not JSON serializable'
+            # self.logger.log_error("Error during uploading. uploaded range: {0}->{1}. status_code : {2}. response : {3}".format(
+            #  current_start, current_end, r.status_code, pprint.pformat(json.dumps(r))
+            # ))
+
+      rjson = r.json()
+      if "id" not in rjson:
+        self.logger.log_error("Error during uploading")
+      else:
+        self.logger.log_info(
+            "Correctly uploaded - id = {0}".format(rjson["id"]))
+        r = self.mgc.get(uurl)
+        self.logger.log_debug(
+            "Status of upload URL: {0}".format(
+                pprint.pformat(
+                    r.json())))
 
       # Close URL
       self.cancel_upload(uurl)
