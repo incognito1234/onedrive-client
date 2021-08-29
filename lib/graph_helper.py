@@ -1,9 +1,11 @@
+from logging import raiseExceptions
 from requests_oauthlib import OAuth2Session
 from lib.shell_helper import MsFolderInfo, MsFileInfo, MsObject
 from lib.log import Logger
 import json
 import os
 import pprint
+import time
 
 
 class MsGraphClient:
@@ -181,6 +183,10 @@ class MsGraphClient:
       current_size = current_end - current_start + 1
 
       stop_reason = "OK"
+      retry_status = self.RetryStatus(5)  # MaxRetry = 5
+
+      simu_error = 0 == 1  # No simulation of error
+
       with open(src_file, 'rb') as fin:
         i = 0
         while True:
@@ -197,8 +203,13 @@ class MsGraphClient:
             break
 
           self.logger.log_debug(
-              "{0} start/end/size/total - {1:>15,}{2:>15,}{3:>15,}{4:>15,}".format(
-                  i, current_start, current_end, current_size, total_size))
+              "{0} start/end/size/total/nbretry - {1:>15,}{2:>15,}{3:>15,}{4:>15,}{5:>6}".format(
+                  i,
+                  current_start,
+                  current_end,
+                  current_size,
+                  total_size,
+                  retry_status.get_nb_retry()))
 
           i = i + 1
 
@@ -208,26 +219,72 @@ class MsGraphClient:
           }
 
           current_start = current_end + 1
-          if total_size >= current_start + CHUNK_SIZE:
-            current_end = current_start + CHUNK_SIZE - 1
-          else:
-            current_end = total_size - 1
-          current_size = current_end - current_start + 1
+          #simu_error = i==5
+          if not simu_error:
+            r = self.mgc.put(
+                uurl,
+                headers=headers,
+                data=current_stream)
+          status_code_put = r.status_code
+          if ((status_code_put in (500, 502, 503, 504)) or (simu_error)):
+            # 500 - Internal Server Error - 502: Bad Gateway - 503: Service
+            # Unavailable - 504: Gateway Timeout
 
-          r = self.mgc.put(
-              uurl,
-              headers=headers,
-              data=current_stream)
+            r = self.mgc.get(uurl)
+            self.logger.log_debug(
+                "Error with retry. Status of upload URL: {0}".format(
+                    pprint.pformat(
+                        r.json())))
 
-          if r.status_code not in (202, 200):  # Accepted or OK
+            if not retry_status.max_retry_reach():
+              retry_status.increase_retry()
+              self.logger.log_error(
+                  "Error during uploading. Retry #{0}. Uploaded range: {1}->{2}. error code : {3}".format(
+                      retry_status.get_nb_retry(), current_start, current_end, status_code_put))
+              self.logger.log_info(
+                  "Wait {0} seconds".format(
+                      retry_status.delay_wait()))
+              ner = r.json()['nextExpectedRanges'][0]
+              current_start = int(ner[:ner.find('-')])
+              if total_size >= current_start + CHUNK_SIZE:
+                current_end = current_start + CHUNK_SIZE - 1
+              else:
+                current_end = total_size - 1
+              current_size = current_end - current_start + 1
+              time.sleep(retry_status.delay_wait())
+              fin.seek(current_start)
+            else:
+              raise Exception("Maximum retry reached after an error")
+
+          elif status_code_put == 404:  # Not found. Upload session no longer exists
             self.logger.log_error(
-                "Error during uploading. uploaded range: {0}->{1}. status_code : {2}".format(
-                    current_start, current_end, r.status_code))
+                "Upload session no longer exists (error code 404). Stop upload")
+            raise Exception(
+                "Upload session no longer exists. Please relaunch upload. Current range: {0}->{1}.".format(
+                    current_start, current_end))
+
+          elif status_code_put not in (202, 201, 200):  # Accepted/Created/OK
+            msg_error = "Error during uploading. uploaded range: {0}->{1}. status_code : {2}".format(
+                current_start, current_end, r.status_code)
+            self.logger.log_error(msg_error)
+
+            raise Exception(msg_error)
             # r is a object with type 'request.response' which is not serializable as json - an error is raised
             # 'TypeError: Object of type 'Response' is not JSON serializable'
             # self.logger.log_error("Error during uploading. uploaded range: {0}->{1}. status_code : {2}. response : {3}".format(
             #  current_start, current_end, r.status_code, pprint.pformat(json.dumps(r))
             # ))
+
+          else:  # status_code_put in (202, 201, 200)
+            current_start = current_end + 1
+            if total_size >= current_start + CHUNK_SIZE:
+              current_end = current_start + CHUNK_SIZE - 1
+            else:
+              current_end = total_size - 1
+            current_size = current_end - current_start + 1
+
+            if retry_status.get_nb_retry() > 0:
+              retry_status.reset()
 
       rjson = r.json()
       if "id" not in rjson:
@@ -262,3 +319,30 @@ class MsGraphClient:
       return (r['error']['code'], None)
     mso = MsObject.MsObjectFromMgcResponse(self, r)
     return (None, mso)
+
+  class RetryStatus:
+
+    def __init__(self, max_retry=5):
+      self.__nb_retry = 0
+      self.max_retry = max_retry
+      self.__delay = 15  # second
+
+    def reset(self):
+      self.__nb_retry = 0
+      self.__delay = 15
+
+    def increase_retry(self):
+      if self.max_retry_reach():
+        return False
+      self.__nb_retry += 1
+      self.__delay *= 2
+      return True
+
+    def get_nb_retry(self):
+      return self.__nb_retry
+
+    def max_retry_reach(self):
+      return self.__nb_retry >= self.max_retry
+
+    def delay_wait(self):
+      return self.__delay
