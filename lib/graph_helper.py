@@ -218,7 +218,6 @@ class MsGraphClient:
               'Content-Range': "bytes {0}-{1}/{2}".format(current_start, current_end, total_size)
           }
 
-          current_start = current_end + 1
           #simu_error = i==5
           if not simu_error:
             r = self.mgc.put(
