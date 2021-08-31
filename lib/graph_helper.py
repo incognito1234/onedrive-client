@@ -237,8 +237,8 @@ class MsGraphClient:
 
             if not retry_status.max_retry_reach():
               retry_status.increase_retry()
-              self.logger.log_error(
-                  "Error during uploading. Retry #{0}. Uploaded range: {1}->{2}. error code : {3}".format(
+              self.logger.log_warning(
+                  "Error during uploading. Retry #{0}. Uploaded range: {1}->{2}. error code : {3}. Retrying upload".format(
                       retry_status.get_nb_retry(), current_start, current_end, status_code_put))
               self.logger.log_info(
                   "Wait {0} seconds".format(
@@ -263,7 +263,7 @@ class MsGraphClient:
                     current_start, current_end))
 
           elif status_code_put not in (202, 201, 200):  # Accepted/Created/OK
-            msg_error = "Error during uploading. uploaded range: {0}->{1}. status_code : {2}".format(
+            msg_error = "Error during uploading. uploaded range: {0}->{1}. status_code : {2}. Stop upload".format(
                 current_start, current_end, r.status_code)
             self.logger.log_error(msg_error)
 
