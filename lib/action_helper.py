@@ -13,9 +13,10 @@ def action_get_user(mgc):
       ))
 
 
-def action_get_children(mgc):
-  folder_info = mgc.get_folder_info(args["<folder>"])
-  children = folder_info.print_children()
+def action_get_children(mgc, folder):
+  folder_info = mgc.get_object_info(folder)[1]
+  folder_info.retrieve_children_info(recursive=False, depth=0)
+  folder_info.print_children()
 
 
 def action_upload(mgc, remote_folder, src_file):

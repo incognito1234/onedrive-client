@@ -58,6 +58,10 @@ def parse_odc_args():
 
   parser_get_user = sub_parsers.add_parser('get_user', help='get user')
 
+  parser_get_children = sub_parsers.add_parser(
+      'get_children', help='get children')
+  parser_get_children.add_argument('folder', type=str, help='folder')
+
   parser_browse = sub_parsers.add_parser(
       'browse', help='browse from root folder')
 

@@ -1,4 +1,3 @@
-
 """
   Onedrive Client Program
 """
@@ -56,7 +55,7 @@ if __name__ == '__main__':
     action_get_user(mgc)
 
   if args.command == "get_children":
-    action_get_children(mgc)
+    action_get_children(mgc, args.folder)
 
   if args.command == "upload":
     action_upload(mgc, args.dstpath, args.srcfile)
