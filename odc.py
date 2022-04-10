@@ -1,3 +1,4 @@
+#!../bin/python3
 """
   Onedrive Client Program
 """
