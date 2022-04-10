@@ -1,6 +1,8 @@
 from lib.check_helper import quickxorhash
 from lib.shell_helper import MsFolderInfo
 from lib.bulk_helper import bulk_folder_download
+from beartype import beartype
+from lib.graph_helper import MsGraphClient
 
 
 def action_get_user(mgc):
@@ -13,13 +15,15 @@ def action_get_user(mgc):
       ))
 
 
-def action_get_children(mgc, folder):
+@beartype
+def action_get_children(mgc: MsGraphClient, folder: str):
   folder_info = mgc.get_object_info(folder)[1]
   folder_info.retrieve_children_info(recursive=False, depth=0)
   folder_info.print_children()
 
 
-def action_upload(mgc, remote_folder, src_file):
+@beartype
+def action_upload(mgc: MsGraphClient, remote_folder: str, src_file: str):
   # Upload a file
   mgc.put_file_content(
       remote_folder,
@@ -27,7 +31,8 @@ def action_upload(mgc, remote_folder, src_file):
   )
 
 
-def action_raw_cmd(mgc):
+@beartype
+def action_raw_cmd(mgc: MsGraphClient):
   while True:
     my_input = input("your command (or quit):")
     if my_input == "quit":
@@ -38,31 +43,40 @@ def action_raw_cmd(mgc):
     print("  ")
 
 
-def action_download(mgc, remote_file, dst_local_path):
+@beartype
+def action_download(mgc: MsGraphClient, remote_file: str, dst_local_path: str):
   r = mgc.download_file_content(
       remote_file,
       dst_local_path
   )
 
 
-def action_mdownload(mgc, folder_path, dest_path, max_depth):
+@beartype
+def action_mdownload(
+        mgc: MsGraphClient,
+        folder_path: str,
+        dest_path: str,
+        max_depth: int):
   mgc.logger.log_debug("action_mdownload - folder = '{0}' - depth = '{1}'".format(
       folder_path, max_depth
   ))
   bulk_folder_download(mgc, folder_path, dest_path, max_depth)
 
 
-def action_remove(mgc, file_path):
+@beartype
+def action_remove(mgc: MsGraphClient, file_path: str):
   r = mgc.delete_file(file_path)
   exit(r)
 
 
-def action_get_info(mgc, remote_path):
+@beartype
+def action_get_info(mgc: MsGraphClient, remote_path: str):
   r = mgc.get_object_info(remote_path)
   print(r[1].str_full_details())
 
 
-def action_browse(mgc):
+@beartype
+def action_browse(mgc: MsGraphClient):
   # current_folder_info = mgc.get_folder_info("")
   current_folder_info = MsFolderInfo("", "", mgc)
   while True:
@@ -94,6 +108,7 @@ def action_browse(mgc):
     print("")
 
 
-def action_qxh(src_file):
+@beartype
+def action_qxh(src_file: str):
   qxh = quickxorhash()
   print(qxh.quickxorhash(src_file))

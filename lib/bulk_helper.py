@@ -1,11 +1,18 @@
 import os
-from lib.shell_helper import MsFolderInfo
+from lib.shell_helper import MsFolderInfo, MsFileInfo
 from lib.check_helper import quickxorhash
+from beartype import beartype
+from lib.graph_helper import MsGraphClient
 
 qxh = quickxorhash()
 
 
-def bulk_folder_download(mgc, folder_path, dest_path, max_depth):
+@beartype
+def bulk_folder_download(
+        mgc: MsGraphClient,
+        folder_path: str,
+        dest_path: str,
+        max_depth: int):
   mgc.logger.log_debug(
       "bulk_folder_download - folder = '{0}' - dest_path = {1} - depth = '{2}'".format(
           folder_path, dest_path, max_depth))
@@ -14,7 +21,11 @@ def bulk_folder_download(mgc, folder_path, dest_path, max_depth):
   mdownload_folder(mgc, folder_info, dest_path, depth=max_depth)
 
 
-def mdownload_folder(mgc, ms_folder, dest_path, depth=999):
+def mdownload_folder(
+        mgc: MsGraphClient,
+        ms_folder: str,
+        dest_path: str,
+        depth: int = 999):
   if os.path.exists(dest_path) and not os.path.isdir(dest_path):
     mgc.logger.log_error(
         "[mdownload_folder] {0} exists and is not a folder - skipping".format(
@@ -46,7 +57,8 @@ def mdownload_folder(mgc, ms_folder, dest_path, depth=999):
   return True
 
 
-def file_needs_download(ms_fileinfo, dest_path):
+@beartype
+def file_needs_download(ms_fileinfo: MsFileInfo, dest_path: str):
   local_file_name = "{0}/{1}".format(dest_path, ms_fileinfo.name)
 
   result = False
