@@ -1,6 +1,6 @@
 from lib.check_helper import quickxorhash
 from lib.shell_helper import MsFolderInfo
-from lib.bulk_helper import bulk_folder_download
+from lib.bulk_helper import bulk_folder_download, bulk_folder_upload
 from beartype import beartype
 from lib.graph_helper import MsGraphClient
 
@@ -29,6 +29,17 @@ def action_upload(mgc: MsGraphClient, remote_folder: str, src_file: str):
       remote_folder,
       src_file
   )
+
+
+@beartype
+def action_mupload(
+        mgc: MsGraphClient,
+        src_local_path: str,
+        dst_remote_folder: str):
+  mgc.logger.log_debug("action_mupload - folder = '{0}' to '{1}'".format(
+      src_local_path, dst_remote_folder
+  ))
+  bulk_folder_upload(mgc, src_local_path, dst_remote_folder)
 
 
 @beartype

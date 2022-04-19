@@ -127,7 +127,7 @@ class MsGraphClient:
     if total_size < (1048576 * 4):
       url = '{0}/me/drive/root:/{1}/{2}:/content'.format(
           MsGraphClient.graph_url,
-          dst_folder,
+          (dst_folder[1:] if dst_folder[0] == '/' else dst_folder),
           file_name
       )
       headers = {
@@ -318,6 +318,34 @@ class MsGraphClient:
       return (r['error']['code'], None)
     mso = MsObject.MsObjectFromMgcResponse(self, r)
     return (None, mso)
+
+  def create_folder(self, dst_path, new_folder):
+    if (dst_path == '/') | (dst_path == ''):
+      dst_url = '{0}/me/drive/root:/children'.format(MsGraphClient.graph_url)
+    else:
+      # Remove first '/' if necessary
+      dst_path2 = dst_path[1:] if dst_path[0] == '/' else dst_path
+      dst_url = '{0}/me/drive/root:/{1}:/children'.format(
+          MsGraphClient.graph_url, dst_path2)
+
+    data = {'name': new_folder, 'folder': {},
+            '@microsoft.graph.conflictBehavior': 'rename'}
+    data_json = json.dumps(data)
+    r = self.mgc.post(
+        dst_url,
+        headers={
+            'Content-Type': 'application/json'},
+        data=data_json)
+
+    if r.status_code == 201:
+      result = True
+    else:
+      result = False
+      self.logger.log_error(
+          "[create_folder]Error during creation of folder {0}/{1} - Error {2}".format(
+              dst_path, new_folder, r.status_code))
+
+    return result
 
   class RetryStatus:
 

@@ -21,9 +21,10 @@ def bulk_folder_download(
   mdownload_folder(mgc, folder_info, dest_path, depth=max_depth)
 
 
+@beartype
 def mdownload_folder(
         mgc: MsGraphClient,
-        ms_folder: str,
+        ms_folder: MsFolderInfo,
         dest_path: str,
         depth: int = 999):
   if os.path.exists(dest_path) and not os.path.isdir(dest_path):
@@ -81,4 +82,106 @@ def file_needs_download(ms_fileinfo: MsFileInfo, dest_path: str):
   ms_fileinfo.mgc.logger.log_debug("[file_needs_download] {1} - {0}".format(
       local_file_name, "True" if result else "False")
   )
+  return result
+
+
+@beartype
+def bulk_folder_upload(
+        mgc: MsGraphClient,
+        src_local_path: str,
+        dst_remote_folder: str,
+        max_depth: int = 999):
+  mgc.logger.log_debug(
+      "[bulk_folder_upload]src_local_path = '{0}' - dst_remote_folder = {1} - depth = '{2}'".format(
+          src_local_path, dst_remote_folder, max_depth))
+  remote_object = mgc.get_object_info(dst_remote_folder)
+  if remote_object[0]:
+    mgc.logger.log_error(
+        "[bulk_folder_upload]folder '{0}' does not exist - Please create it first".format(dst_remote_folder))
+    return False
+
+  remote_folder_info = remote_object[1]
+  if not isinstance(remote_folder_info, MsFolderInfo):
+    mgc.logger.log_error(
+        "[bulk_folder_upload]{0} exists but is not a folder - stop upload".format(dst_remote_folder))
+    return False
+  remote_folder_info.retrieve_children_info(recursive=True, depth=max_depth)
+  mupload_folder(mgc, remote_folder_info, src_local_path, depth=max_depth)
+
+
+@beartype
+def mupload_folder(
+        mgc: MsGraphClient,
+        ms_folder: MsFolderInfo,
+        src_path: str,
+        depth: int = 999):
+  mgc.logger.log_debug(
+      '[mupload_folder]Starting. remote path = {0} - src path = {1} - depth = {2}'.format(
+          ms_folder.get_full_path(), src_path, depth))
+  ms_folder.retrieve_children_info(recursive=True, depth=depth)
+  scan_dir = os.scandir(src_path)
+  for entry in scan_dir:
+
+    if entry.is_file():
+      if ms_folder.is_child_folder(entry.name):
+        mgc.logger.log_warning(
+            '[mupload_folder]{0} is a local file but is a remote folder. Skip it'.format(
+                entry.path()))
+      else:
+        if file_needs_upload(src_path, entry.name, ms_folder):
+          mgc.logger.log_info(
+              "[mupload_folder]Upload file {0}".format(
+                  entry.path))
+          mgc.put_file_content(ms_folder.get_full_path(),
+                               "{0}/{1}".format(src_path, entry.name))
+
+    elif entry.is_dir():
+
+      if ms_folder.is_child_file(entry.name):
+        mgc.logger.log_warning(
+            '[mupload_folder]{0} is a local folder but is a remote file. Skip it'.format(
+                entry.path))
+      else:
+        sub_folder_info = ms_folder.get_child_folder(entry.name)
+        if sub_folder_info is None:
+          mgc.logger.log_info(
+              '[mupload_folder]{0} does not exist. Create it'.format(
+                  entry.path))
+          sub_folder_info = ms_folder.create_empty_subfolder(entry.name)
+
+        if depth > 0:
+          mupload_folder(mgc, sub_folder_info, entry.path, depth - 1)
+        else:
+          mgc.logger.log_info(
+              '[mupload_folder]maxdepth is reach for folder {0}. Stop recursive upload'.format(
+                  entry.path))
+
+    else:
+      mgc.logger.log_warning('[mupload_folder]{0} is nothing 8-/ Skip it')
+
+  scan_dir.close()
+
+  return True
+
+
+@beartype
+def file_needs_upload(
+        src_folder_path: str,
+        str_file_name: str,
+        ms_remote_folder: MsFolderInfo):
+  str_local_file_name = "{0}/{1}".format(src_folder_path, str_file_name)
+
+  if ms_remote_folder.is_child_file(str_file_name):
+    hash_qxh = qxh.quickxorhash(str_local_file_name)
+    ms_fileinfo = ms_remote_folder.get_child_file(str_file_name)
+
+    if ms_fileinfo.qxh is not None:
+      ms_fileinfo.mgc.logger.log_debug(
+          "[file_needs_upload]qxh exists for '{0}' - '{1}' vs '{2}'".format(
+              ms_fileinfo.name, hash_qxh, ms_fileinfo.qxh))
+      result = ms_fileinfo.qxh != hash_qxh
+    else:
+      result = True
+  else:
+    result = True
   return result

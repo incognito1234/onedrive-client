@@ -1,6 +1,7 @@
 
 import yaml
 from requests_oauthlib import OAuth2Session
+from lib.log import Logger
 import os
 import time
 import json

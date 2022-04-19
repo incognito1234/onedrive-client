@@ -1,5 +1,7 @@
+from re import fullmatch
 from lib.datetime_helper import str_from_ms_datetime
 from abc import ABC, abstractmethod
+from beartype import beartype
 
 
 class MsObject(ABC):
@@ -59,6 +61,8 @@ class MsFolderInfo(MsObject):
     self.__mgc = mgc
     self.children_file = []
     self.children_folder = []
+    self.__dict_children_file = {}
+    self.__dict_children_folder = {}
     self.parent = parent
     self.child_count = child_count
     self.size = size
@@ -103,7 +107,7 @@ class MsFolderInfo(MsObject):
         isFolder = 'folder' in c
         if isFolder:
           fi = MsFolderInfo.MsFolderFromMgcResponse(self.__mgc, c, self)
-          self.add_folder(fi)
+          self.add_folder_info(fi)
           if recursive:
             fi.retrieve_children_info(
                 only_folders=only_folders,
@@ -112,7 +116,7 @@ class MsFolderInfo(MsObject):
 
         elif not only_folders:
           fi = MsFileInfo.MsFileInfoFromMgcResponse(self.__mgc, c)
-          self.add_file(fi)
+          self.add_file_info(fi)
         else:
           self.__mgc.Logger.log_info(
               "retrieve_children_info : UNKNOWN RESPONSE")
@@ -125,11 +129,40 @@ class MsFolderInfo(MsObject):
 
       self.__children_folders_retrieval_status = "all"
 
-  def add_folder(self, folder_info):
-    self.children_folder.append(folder_info)
+  def create_empty_subfolder(self, folder_name):
+    creation_ok = self.__mgc.create_folder(self.get_full_path(), folder_name)
+    if creation_ok:
+      new_folder_info = MsFolderInfo(
+          folder_name,
+          "{0}/{1}".format(self.get_full_path(), folder_name),
+          self.__mgc,
+          parent=self)
+      self.add_folder_info(new_folder_info)
+      if self.child_count is not None:
+        self.child_count += 1
+      return new_folder_info
+    else:
+      return None
 
-  def add_file(self, file_info):
+  def add_folder_info(self, folder_info):
+    self.children_folder.append(folder_info)
+    self.__dict_children_folder[folder_info.name] = folder_info
+
+  def add_file_info(self, file_info):
     self.children_file.append(file_info)
+    self.__dict_children_file[file_info.name] = file_info
+
+  def is_child_folder(self, folder_name):
+    return folder_name in self.__dict_children_folder
+
+  def is_child_file(self, file_name):
+    return file_name in self.__dict_children_file
+
+  def get_child_folder(self, folder_name):
+    return self.__dict_children_folder[folder_name]
+
+  def get_child_file(self, file_name):
+    return self.__dict_children_file[file_name]
 
   def files_have_been_retrieved(self):
     return self.__children_files_retrieval_status == "all"

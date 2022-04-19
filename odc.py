@@ -10,7 +10,9 @@ from lib.log import Logger
 from lib.args_helper import parse_odc_args
 from lib.action_helper import (
     action_get_user,
-    action_get_children, action_upload, action_raw_cmd,
+    action_get_children,
+    action_upload, action_mupload,
+    action_raw_cmd,
     action_download, action_mdownload,
     action_get_info,
     action_browse, action_qxh, action_remove
@@ -60,6 +62,9 @@ if __name__ == '__main__':
 
   if args.command == "upload":
     action_upload(mgc, args.dstpath, args.srcfile)
+
+  if args.command == "mupload":
+    action_mupload(mgc, args.srclocalpath, args.dstremotefolder)
 
   if args.command == "raw_cmd":
     action_raw_cmd(mgc)

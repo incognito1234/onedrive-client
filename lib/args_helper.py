@@ -3,13 +3,14 @@
 
   Usage:
     odc init
-    odc upload <srcfile> <dstremotefolder> [--logfile=<logfile>]
-    odc get_user [--logfile=<logfile>]
+    odc upload <srcfile> <dstremotefolder>
+    odc mupload <srclocalpath> <dstremotefolder>
+    odc get_user
     odc get_children <folder>
     odc raw_cmd
-    odc browse [--logfile=<logfile>]
-    odc download <remotefile> <dstlocalpath> [--logfile=<logfile>]
-    odc mdownload <folderpath>
+    odc browse
+    odc download <remotefile> <dstlocalpath>
+    odc mdownload <folderpath> <dstlocalpath>
     odc remove <filepath>
     odc get_info  <dstremotepath>
     odc qxh <srcfile>
@@ -53,6 +54,17 @@ def parse_odc_args():
   parser_upload = sub_parsers.add_parser('upload', help='upload a file')
   parser_upload.add_argument('srcfile', type=str, help='source file')
   parser_upload.add_argument('dstpath', type=str, help='destination path')
+
+  parser_mupload = sub_parsers.add_parser(
+      'mupload', help='upload a complete folder')
+  parser_mupload.add_argument(
+      'srclocalpath',
+      type=str,
+      help='source local folder')
+  parser_mupload.add_argument(
+      'dstremotefolder',
+      type=str,
+      help='destination remote folder')
 
   parser_raw_cmd = sub_parsers.add_parser('raw_cmd', help='raw command')
 
