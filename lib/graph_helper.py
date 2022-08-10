@@ -3,7 +3,6 @@
 #  See file LICENSE for full license details
 from logging import raiseExceptions
 from requests_oauthlib import OAuth2Session
-from lib.shell_helper import MsFolderInfo, MsFileInfo, MsObject
 from lib.log import Logger
 import json
 import os
@@ -312,15 +311,6 @@ class MsGraphClient:
     r = self.mgc.delete(upload_url)
 
     return r
-
-  def get_object_info(self, dst_path):
-    r = self.mgc.get('{0}/me/drive/root:/{1}'.format(
-        MsGraphClient.graph_url, dst_path
-    )).json()
-    if 'error' in r:
-      return (r['error']['code'], None)
-    mso = MsObject.MsObjectFromMgcResponse(self, r)
-    return (None, mso)
 
   def create_folder(self, dst_path, new_folder):
     if (dst_path == '/') | (dst_path == ''):

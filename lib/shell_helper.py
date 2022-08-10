@@ -2,9 +2,9 @@
 #  This file is part of OneDrive Client Program which is released under MIT License
 #  See file LICENSE for full license details
 from re import fullmatch
-from lib.datetime_helper import str_from_ms_datetime
 from abc import ABC, abstractmethod
 from beartype import beartype
+from lib.oi_factory import ObjectInfoFactory
 
 
 class MsObject(ABC):
@@ -32,15 +32,6 @@ class MsObject(ABC):
   def __isabstractmethod__(self):
     return any(getattr(f, '__isabstractmethod__', False) for
                f in (self._fget, self._fset, self._fdel))
-
-  def MsObjectFromMgcResponse(mgc, mgc_response_json):
-    if ('folder' in mgc_response_json):
-      # import pprint
-      # pprint.pprint(mgc_response_json)
-      result = MsFolderInfo.MsFolderFromMgcResponse(mgc, mgc_response_json)
-      return result
-    else:
-      return MsFileInfo.MsFileInfoFromMgcResponse(mgc, mgc_response_json)
 
 
 class MsFolderInfo(MsObject):
@@ -109,7 +100,7 @@ class MsFolderInfo(MsObject):
       for c in ms_response:
         isFolder = 'folder' in c
         if isFolder:
-          fi = MsFolderInfo.MsFolderFromMgcResponse(self.__mgc, c, self)
+          fi = ObjectInfoFactory.MsFolderFromMgcResponse(self.__mgc, c, self)
           self.add_folder_info(fi)
           if recursive:
             fi.retrieve_children_info(
@@ -118,7 +109,7 @@ class MsFolderInfo(MsObject):
                 depth=depth - 1)
 
         elif not only_folders:
-          fi = MsFileInfo.MsFileInfoFromMgcResponse(self.__mgc, c)
+          fi = ObjectInfoFactory.MsFileInfoFromMgcResponse(self.__mgc, c)
           self.add_file_info(fi)
         else:
           self.__mgc.Logger.log_info(
@@ -173,13 +164,18 @@ class MsFolderInfo(MsObject):
   def folders_have_been_retrieved(self):
     return self.__children_folders_retrieval_status == "all"
 
-  def print_children(self, start_number=0, recursive=False, depth=999):
+  def print_children(
+          self,
+          start_number=0,
+          recursive=False,
+          only_folders=True,
+          depth=999):
     if not self.folders_have_been_retrieved():
       self.__mgc.logger.log_debug(
           "[print_children] folder_path = {0} - folders have not been retrieved".format(
               self.get_full_path()))
       self.retrieve_children_info(
-          only_folders=False,
+          only_folders=only_folders,
           recursive=recursive,
           depth=depth)
     i = start_number
@@ -213,19 +209,6 @@ class MsFolderInfo(MsObject):
       result = "Folder - {0}/ ({1})- <ok>".format(self.get_full_path()
                                                   [1:], self.child_count)
     return result
-
-  def MsFolderFromMgcResponse(mgc, mgc_response_json, parent=None):
-    return MsFolderInfo(
-        full_path="{0}/{1}".format(
-            mgc_response_json['parentReference']['path'][12:],
-            mgc_response_json['name']),
-        name=mgc_response_json['name'],
-        mgc=mgc,
-        id=mgc_response_json['id'],
-        child_count=mgc_response_json['folder']['childCount'],
-        size=mgc_response_json['size'],
-        parent=parent
-    )
 
   def str_full_details(self):
     result = ("Folder {0}\n"
@@ -281,22 +264,6 @@ class MsFileInfo(MsObject):
     )
     return result
 
-  def MsFileInfoFromMgcResponse(mgc, mgc_response_json):
-    if 'quickXorHash' in mgc_response_json['file']['hashes']:
-      qxh = mgc_response_json['file']['hashes']['quickXorHash']
-    else:
-      qxh = None
-    return MsFileInfo(mgc_response_json['name'],
-                      mgc_response_json['parentReference']['path'][13:],
-                      mgc,
-                      mgc_response_json['id'],
-                      mgc_response_json['size'],
-                      qxh,
-                      mgc_response_json['file']['hashes']['sha1Hash'],
-                      str_from_ms_datetime(mgc_response_json['fileSystemInfo']['createdDateTime']),
-                      str_from_ms_datetime(mgc_response_json['fileSystemInfo']['lastModifiedDateTime'])
-                      )
-
   def str_full_details(self):
     result = (
         "File - '{0}'\n"
@@ -320,3 +287,43 @@ class MsFileInfo(MsObject):
         self.last_modified_datetime)
 
     return result
+
+
+class OneDriveShell:
+
+  def __init__(self, mgc):
+    self.mgc = mgc
+    self.only_folders = False
+
+  def launch(self):
+     # current_folder_info = mgc.get_folder_info("")
+    current_folder_info = MsFolderInfo("", "", self.mgc)
+
+    while True:
+
+      if current_folder_info.parent is not None:
+        print("  0 - <parent>")
+
+      current_folder_info.print_children(
+          start_number=1, only_folders=self.only_folders)
+
+      my_input = input("your command (or quit): ")
+
+      if my_input == "quit":
+        break
+
+      if my_input.isdigit() and int(my_input) <= len(
+              current_folder_info.children_folder):
+
+        int_input = int(my_input)
+        if int_input == 0:
+          current_folder_info = current_folder_info.parent
+        else:
+          current_folder_info = current_folder_info.children_folder[int(
+              my_input) - 1]
+
+      else:
+        print("")
+        print(">>>>> ERROR >>>>>>>> Invalid command <<<<<<<<<<<")
+
+      print("")

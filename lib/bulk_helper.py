@@ -6,6 +6,7 @@ from lib.shell_helper import MsFolderInfo, MsFileInfo
 from lib.check_helper import quickxorhash
 from beartype import beartype
 from lib.graph_helper import MsGraphClient
+from lib.oi_factory import ObjectInfoFactory
 
 qxh = quickxorhash()
 
@@ -19,7 +20,7 @@ def bulk_folder_download(
   mgc.logger.log_debug(
       "bulk_folder_download - folder = '{0}' - dest_path = {1} - depth = '{2}'".format(
           folder_path, dest_path, max_depth))
-  folder_info = mgc.get_object_info(folder_path)[1]
+  folder_info = ObjectInfoFactory.get_object_info(mgc, folder_path)[1]
   folder_info.retrieve_children_info(recursive=True, depth=max_depth)
   mdownload_folder(mgc, folder_info, dest_path, depth=max_depth)
 
@@ -97,7 +98,7 @@ def bulk_folder_upload(
   mgc.logger.log_debug(
       "[bulk_folder_upload]src_local_path = '{0}' - dst_remote_folder = {1} - depth = '{2}'".format(
           src_local_path, dst_remote_folder, max_depth))
-  remote_object = mgc.get_object_info(dst_remote_folder)
+  remote_object = ObjectInfoFactory.get_object_info(mgc, dst_remote_folder)
   if remote_object[0]:
     mgc.logger.log_error(
         "[bulk_folder_upload]folder '{0}' does not exist - Please create it first".format(dst_remote_folder))

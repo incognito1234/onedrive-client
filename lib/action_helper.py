@@ -2,8 +2,9 @@
 #  This file is part of OneDrive Client Program which is released under MIT License
 #  See file LICENSE for full license details
 from lib.check_helper import quickxorhash
-from lib.shell_helper import MsFolderInfo
+from lib.shell_helper import OneDriveShell
 from lib.bulk_helper import bulk_folder_download, bulk_folder_upload
+from lib.oi_factory import ObjectInfoFactory
 from beartype import beartype
 from lib.graph_helper import MsGraphClient
 
@@ -20,7 +21,7 @@ def action_get_user(mgc):
 
 @beartype
 def action_get_children(mgc: MsGraphClient, folder: str):
-  folder_info = mgc.get_object_info(folder)[1]
+  folder_info = ObjectInfoFactory.get_object_info(mgc, folder)[1]
   folder_info.retrieve_children_info(recursive=False, depth=0)
   folder_info.print_children()
 
@@ -85,41 +86,14 @@ def action_remove(mgc: MsGraphClient, file_path: str):
 
 @beartype
 def action_get_info(mgc: MsGraphClient, remote_path: str):
-  r = mgc.get_object_info(remote_path)
+  r = ObjectInfoFactory.get_object_info(mgc, remote_path)
   print(r[1].str_full_details())
 
 
 @beartype
 def action_browse(mgc: MsGraphClient):
-  # current_folder_info = mgc.get_folder_info("")
-  current_folder_info = MsFolderInfo("", "", mgc)
-  while True:
-
-    if current_folder_info.parent is not None:
-      print("  0 - <parent>")
-
-    current_folder_info.print_children(start_number=1)
-
-    my_input = input("your command (or quit): ")
-
-    if my_input == "quit":
-      break
-
-    if my_input.isdigit() and int(my_input) <= len(
-            current_folder_info.children_folder):
-
-      int_input = int(my_input)
-      if int_input == 0:
-        current_folder_info = current_folder_info.parent
-      else:
-
-        current_folder_info = current_folder_info.children_folder[int(
-            my_input) - 1]
-
-    else:
-      print("")
-      print(">>>>> ERROR >>>>>>>> Invalid command <<<<<<<<<<<")
-    print("")
+  od_shell = OneDriveShell(mgc)
+  od_shell.launch()
 
 
 @beartype
