@@ -1,3 +1,6 @@
+#  Copyright 2019-2022 Jareth Lomson <jareth.lomson@gmail.com>
+#  This file is part of OneDrive Client Program which is released under MIT License
+#  See file LICENSE for full license details
 from lib.check_helper import quickxorhash
 from lib.shell_helper import MsFolderInfo
 from lib.bulk_helper import bulk_folder_download, bulk_folder_upload

@@ -1,3 +1,6 @@
+#  Copyright 2019-2022 Jareth Lomson <jareth.lomson@gmail.com>
+#  This file is part of OneDrive Client Program which is released under MIT License
+#  See file LICENSE for full license details
 from logging import raiseExceptions
 from requests_oauthlib import OAuth2Session
 from lib.shell_helper import MsFolderInfo, MsFileInfo, MsObject
