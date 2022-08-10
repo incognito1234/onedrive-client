@@ -5,7 +5,13 @@ from lib.log import Logger
 
 
 def create_and_get_config_folder(lg: Logger = None):
-  param_folder = "{}/.odc/".format(os.environ['HOME'])
+  if 'HOME' in os.environ:
+    home_folder = os.environ['HOME']
+  elif 'APPDATA' in os.environ:
+    home_folder = os.environ['APPDATA']
+  else:
+    home_folder = ''
+  param_folder = "{}/.odc/".format(home_folder)
 
   if not os.path.exists(param_folder):
     try:
