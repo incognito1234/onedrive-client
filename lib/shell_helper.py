@@ -159,10 +159,10 @@ class MsFolderInfo(MsObject):
     return file_name in self.__dict_children_file
 
   def get_child_folder(self, folder_name):
-    return self.__dict_children_folder[folder_name]
+    return self.__dict_children_folder[folder_name] if folder_name in self.__dict_children_folder else None
 
   def get_child_file(self, file_name):
-    return self.__dict_children_file[file_name]
+    return self.__dict_children_file[file_name] if file_name in self.__dict_children_file else None
 
   def files_have_been_retrieved(self):
     return self.__children_files_retrieval_status == "all"
