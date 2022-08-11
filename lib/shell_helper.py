@@ -334,10 +334,11 @@ class OneDriveShell:
         print("   q")
         print("   quit                  : Quit Browser")
 
+      elif my_input == "":
+        pass
+
       else:
         print("unknown command")
-
-      print("")
 
 
 class InfoFormatter(ABC):
