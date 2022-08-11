@@ -503,10 +503,11 @@ class LsFormatter():
     w = 0
     for i in range(0, nb_lines):
       elt = elts[i]
-      w = len(elt)
       c = 0
       if len(elt) > column_sizes[c]:
         column_sizes[c] = len(elt)
+      w = column_sizes[0]
+
       for j in range(i + nb_lines, nb_elts, nb_lines):
         elt = elts[j]
         c += 1
@@ -519,6 +520,7 @@ class LsFormatter():
 
       if w > max_len_line:
         return False
+
     return True
 
   def column_sizes(self, elts, nb_columns):
