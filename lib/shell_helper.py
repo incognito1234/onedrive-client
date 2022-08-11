@@ -3,6 +3,7 @@
 #  See file LICENSE for full license details
 from re import fullmatch
 from abc import ABC, abstractmethod
+import math
 from beartype import beartype
 from lib.oi_factory import ObjectInfoFactory
 from lib.graph_helper import MsGraphClient
@@ -496,7 +497,7 @@ class LsFormatter():
 
   def is_printable(self, max_len_line, elts, nb_columns):
     nb_elts = len(elts)
-    nb_lines = round(0.5 + (nb_elts - 1) / nb_columns)
+    nb_lines = 1 + math.floor((len(elts) - 1) / nb_columns)
 
     column_sizes = [0] * nb_columns
     w = 0
@@ -522,7 +523,7 @@ class LsFormatter():
 
   def column_sizes(self, elts, nb_columns):
     nb_elts = len(elts)
-    nb_lines = round(0.5 + (nb_elts - 1) / nb_columns)
+    nb_lines = 1 + math.floor((len(elts) - 1) / nb_columns)
     column_sizes = [0] * nb_columns
     for i in range(0, nb_lines):
       elt = elts[i]
@@ -573,8 +574,7 @@ class LsFormatter():
     all_names = list(folder_names) + list(file_names)
     nbc = self.nb_columns(all_names)
     cs = self.column_sizes(all_names, nbc)
-
-    nb_lines = round(0.5 + (len(all_names) - 1) / nbc)
+    nb_lines = 1 + math.floor((len(all_names) - 1) / nbc)
     for i in range(0, nb_lines):
       k = 0
       new_line = InfoFormatter.alignleft(all_names[i], cs[k])
