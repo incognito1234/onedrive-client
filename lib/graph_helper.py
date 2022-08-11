@@ -53,9 +53,8 @@ class MsGraphClient:
       fp = '{0}/me/drive/root:{1}:/children'.format(
           MsGraphClient.graph_url, folder_path)
     if only_folder:
-      param_urls = {
-          '$filter': 'folder ne any',
-          '$select': 'name,folder,id,size'}
+      param_urls = {'$filter': 'folder ne any',
+                    '$select': 'name,folder,id,size,parentReference'}
     else:
       param_urls = ()
 

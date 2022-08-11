@@ -5,6 +5,7 @@ from re import fullmatch
 from abc import ABC, abstractmethod
 from beartype import beartype
 from lib.oi_factory import ObjectInfoFactory
+from lib.graph_helper import MsGraphClient
 
 
 class MsObject(ABC):
@@ -36,14 +37,15 @@ class MsObject(ABC):
 
 class MsFolderInfo(MsObject):
 
+  @beartype
   def __init__(
           self,
-          name,
-          full_path,
-          mgc,
-          id=0,
-          child_count=None,
-          size=None,
+          name: str,
+          full_path: str,
+          mgc: MsGraphClient,
+          id: str = "0",
+          child_count: int = None,
+          size: int = None,
           parent=None):
     """
         Init folder info
@@ -82,8 +84,8 @@ class MsFolderInfo(MsObject):
           recursive=False,
           depth=999):
     self.__mgc.logger.log_debug(
-        "[retrieve_children_info] {0} - only_folders = {1} - depth = {2}".format(
-            self.get_full_path(), only_folders, depth))
+        f"[retrieve_children_info] {self.get_full_path()} - only_folders = {only_folders} - depth = {depth}")
+
     if depth > 0 and (
         only_folders and not self.folders_have_been_retrieved()
         or not self.files_have_been_retrieved() or not self.folders_have_been_retrieved()
@@ -99,7 +101,7 @@ class MsFolderInfo(MsObject):
 
       for c in ms_response:
         isFolder = 'folder' in c
-        if isFolder:
+        if isFolder and not self.folders_have_been_retrieved():
           fi = ObjectInfoFactory.MsFolderFromMgcResponse(self.__mgc, c, self)
           self.add_folder_info(fi)
           if recursive:
@@ -108,7 +110,7 @@ class MsFolderInfo(MsObject):
                 recursive=recursive,
                 depth=depth - 1)
 
-        elif not only_folders:
+        elif not only_folders and not isFolder:
           fi = ObjectInfoFactory.MsFileInfoFromMgcResponse(self.__mgc, c)
           self.add_file_info(fi)
         else:
@@ -116,7 +118,7 @@ class MsFolderInfo(MsObject):
               "retrieve_children_info : UNKNOWN RESPONSE")
 
       self.__mgc.logger.log_debug(
-          "[retrieve_children_info] {0} - setting retrieval status".format(self.get_full_path()))
+          f"[retrieve_children_info] {self.get_full_path()} - setting retrieval status")
 
       if not only_folders:
         self.__children_files_retrieval_status = "all"
@@ -170,27 +172,23 @@ class MsFolderInfo(MsObject):
           recursive=False,
           only_folders=True,
           depth=999):
-    if not self.folders_have_been_retrieved():
+    if ((not self.folders_have_been_retrieved() and only_folders)
+            or (not self.files_have_been_retrieved() and not only_folders)):
       self.__mgc.logger.log_debug(
-          "[print_children] folder_path = {0} - folders have not been retrieved".format(
-              self.get_full_path()))
+          f"[print_children] folder_path = {self.get_full_path()} - folders have not been retrieved")
       self.retrieve_children_info(
           only_folders=only_folders,
           recursive=recursive,
           depth=depth)
+
     i = start_number
     for c in self.children_folder:
-      print("{0:>3} - {1}".format(
-          i,
-          c
-      ))
+      print(f"{i:>3} - {c}")
       i = i + 1
-    for c in self.children_file:
-      print("{0:>3} - {1}".format(
-          i,
-          c
-      ))
-      i = i + 1
+    if not only_folders:
+      for c in self.children_file:
+        print(f"{i:>3} - {c}")
+        i = i + 1
 
     if recursive and depth > 0:
       for c in self.children_folder:
@@ -202,12 +200,15 @@ class MsFolderInfo(MsObject):
     return i - start_number
 
   def __str__(self):
+    status_subfolders = "<subfolders ok>" if self.folders_have_been_retrieved() else ""
+    status_subfiles = "<subfiles ok>" if self.files_have_been_retrieved() else ""
     if not self.folders_have_been_retrieved():
       result = "Folder - {0}/ ({1} - {2:,})".format(self.get_full_path()
                                                     [1:], self.child_count, self.size)
     else:
       result = "Folder - {0}/ ({1})- <ok>".format(self.get_full_path()
                                                   [1:], self.child_count)
+    result = f"Folder - {self.get_full_path()[1:]} - {self.child_count} {status_subfolders}{status_subfiles}"
     return result
 
   def str_full_details(self):
@@ -321,6 +322,23 @@ class OneDriveShell:
         else:
           current_folder_info = current_folder_info.children_folder[int(
               my_input) - 1]
+
+      elif my_input == "set onlyfolders" or my_input == "set of":
+        self.only_folders = True
+
+      elif my_input == "set noonlyfolders" or my_input == "set noof":
+        self.only_folders = False
+
+      elif my_input == "help" or my_input == "h":
+        print("Onedrive Browser Help")
+        print("")
+        print("COMMAND")
+        print("   set onlyfolders")
+        print("   set of                : Retrieve info only about folders")
+        print("   set noonlyfolders")
+        print("   set noof              : Retrieve info about folders and files")
+        print("   <number>              : Dig into given folder")
+        print("   quit                  : Quit Browser")
 
       else:
         print("")
