@@ -6,6 +6,7 @@ from abc import ABC, abstractmethod
 from beartype import beartype
 from lib.oi_factory import ObjectInfoFactory
 from lib.graph_helper import MsGraphClient
+import os
 
 
 class MsObject(ABC):
@@ -255,12 +256,10 @@ class OneDriveShell:
   def __init__(self, mgc):
     self.mgc = mgc
     self.only_folders = False
-    self.file_formatter = MsFileFormatter(45)
-    self.folder_formatter = MsFolderFormatter(45)
+    self.ls_formatter = LsFormatter(MsFileFormatter(45), MsFolderFormatter(45))
 
   def change_max_column_size(self, nb):
-    self.file_formatter = MsFileFormatter(nb)
-    self.folder_formatter = MsFolderFormatter(nb)
+    self.ls_formatter = LsFormatter(MsFileFormatter(nb), MsFolderFormatter(nb))
 
   def launch(self):
      # current_folder_info = mgc.get_folder_info("")
@@ -278,13 +277,17 @@ class OneDriveShell:
       if my_input == "quit":
         break
 
-      if my_input == "ls":
+      if my_input == "ll":
         if current_folder_info.parent is not None:
           print("  0 - <parent>")
-        self.print_folder_children(
-            current_folder_info,
-            start_number=1,
-            only_folders=self.only_folders)
+        self.ls_formatter.print_folder_children(
+            current_folder_info, start_number=1, only_folders=self.only_folders)
+
+      elif my_input == "ls":
+        if current_folder_info.parent is not None:
+          print("  0 - <parent>")
+        self.ls_formatter.print_folder_children_lite(
+            current_folder_info, only_folders=self.only_folders)
 
       elif my_input == "set onlyfolders" or my_input == "set of":
         self.only_folders = True
@@ -325,7 +328,8 @@ class OneDriveShell:
         print("   set noof              : Retrieve info about folders and files")
         print("   set columnsize")
         print("   set cs                : Set column size for name")
-        print("   ls                    : List current folder")
+        print("   ls                    : List current folder by columns")
+        print("   ll                    : List Folder with details")
         print("   <number>              : Dig into given folder")
         print("   q")
         print("   quit                  : Quit Browser")
@@ -335,45 +339,15 @@ class OneDriveShell:
 
       print("")
 
-  def print_folder_children(
-          self,
-          fi,
-          start_number=0,
-          recursive=False,
-          only_folders=True,
-          depth=999):
-    if ((not fi.folders_have_been_retrieved() and only_folders)
-            or (not fi.files_have_been_retrieved() and not only_folders)):
-      self.mgc.logger.log_debug(
-          f"[print_children] folder_path = {fi.get_full_path()} - folders have not been retrieved")
-      fi.retrieve_children_info(
-          only_folders=only_folders,
-          recursive=recursive,
-          depth=depth)
-
-    i = start_number
-    for c in fi.children_folder:
-      print(f"{i:>3} - {self.folder_formatter.format(c)}")
-      i = i + 1
-    if not only_folders:
-      for c in fi.children_file:
-        print(f"{i:>3} - {self.file_formatter.format(c)}")
-        i = i + 1
-
-    if recursive and depth > 0:
-      for c in fi.children_folder:
-        nb_children = c.print_children(
-            start_number=i, recursive=False, depth=depth - 1)
-
-        i += nb_children
-
-    return i - start_number
-
 
 class InfoFormatter(ABC):
 
   @abstractmethod
   def format(self, what):
+    return "default"
+
+  @abstractmethod
+  def format_lite(self, what):
     return "default"
 
   @staticmethod
@@ -402,6 +376,10 @@ class MsFolderFormatter(InfoFormatter):
         f"  {what.child_count:>6}  {status_subfolders}{status_subfiles}")
     return result
 
+  @beartype
+  def format_lite(self, what: MsFolderInfo):
+    return f"{what.name}/"
+
 
 class MsFileFormatter(InfoFormatter):
   def __init__(self, max_name_size=25):
@@ -414,3 +392,135 @@ class MsFileFormatter(InfoFormatter):
     fmdt = what.last_modified_datetime.strftime("%Y-%m-%d %H:%M:%S")
     result = f"{what.size:>20,}  {InfoFormatter.alignleft(fname,self.max_name_size)}  {fmdt}  "
     return result
+
+  @beartype
+  def format_lite(self, what: MsFileInfo):
+    return what.name
+
+
+class LsFormatter():
+
+  @beartype
+  def __init__(self, file_formatter: MsFileFormatter,
+               folder_formatter: MsFolderFormatter):
+    self.file_formatter = file_formatter
+    self.folder_formatter = folder_formatter
+    self.sbc = 2  # Space between columns
+
+  def print_folder_children(
+          self,
+          fi,
+          start_number=0,
+          recursive=False,
+          only_folders=True,
+          depth=999):
+    if ((not fi.folders_have_been_retrieved() and only_folders)
+            or (not fi.files_have_been_retrieved() and not only_folders)):
+      fi.retrieve_children_info(
+          only_folders=only_folders,
+          recursive=recursive,
+          depth=depth)
+
+    i = start_number
+    for c in fi.children_folder:
+      print(f"{i:>3} - {self.folder_formatter.format(c)}")
+      i = i + 1
+    if not only_folders:
+      for c in fi.children_file:
+        print(f"{i:>3} - {self.file_formatter.format(c)}")
+        i = i + 1
+
+    if recursive and depth > 0:
+      for c in fi.children_folder:
+        nb_children = c.print_children(
+            start_number=i, recursive=False, depth=depth - 1)
+
+        i += nb_children
+
+    return i - start_number
+
+  def is_printable(self, max_len_line, elts, nb_columns):
+    nb_elts = len(elts)
+    nb_lines = round(0.5 + (nb_elts - 1) / nb_columns)
+
+    column_sizes = [0] * nb_columns
+    w = 0
+    for i in range(0, nb_lines):
+      elt = elts[i]
+      w = len(elt)
+      c = 0
+      if len(elt) > column_sizes[c]:
+        column_sizes[c] = len(elt)
+      for j in range(i + nb_lines, nb_elts, nb_lines):
+        elt = elts[j]
+        c += 1
+        if len(elt) > column_sizes[c]:
+          column_sizes[c] = len(elt)
+        w += self.sbc + column_sizes[c]
+
+      for d in range(c + 1, nb_columns):
+        w += self.sbc + column_sizes[d]
+
+      if w > max_len_line:
+        return False
+    return True
+
+  def column_sizes(self, elts, nb_columns):
+    nb_elts = len(elts)
+    nb_lines = round(0.5 + (nb_elts - 1) / nb_columns)
+    column_sizes = [0] * nb_columns
+    for i in range(0, nb_lines):
+      elt = elts[i]
+      w = len(elt)
+      c = 0
+      if len(elt) > column_sizes[c]:
+        column_sizes[c] = len(elt)
+
+      for j in range(i + nb_lines, nb_elts, nb_lines):
+        c += 1
+        elt = elts[j]
+        if len(elt) > column_sizes[c]:
+          column_sizes[c] = len(elt)
+        w += self.sbc + column_sizes[c]
+
+    return column_sizes
+
+  def nb_columns(self, elts):
+    low = 1
+    high = 10
+    while high - low > 1:
+      mid = round((low + high) / 2)
+      ans = self.is_printable(os.get_terminal_size().columns, elts, mid)
+      if ans:
+        low = mid
+      else:
+        high = mid
+    if self.is_printable(os.get_terminal_size().columns, elts, high):
+      return high
+    else:
+      return low
+
+  def print_folder_children_lite(self, fi, only_folders=True):
+    if ((not fi.folders_have_been_retrieved() and only_folders)
+            or (not fi.files_have_been_retrieved() and not only_folders)):
+      fi.retrieve_children_info(only_folders=only_folders)
+
+    folder_names = map(
+        lambda x: self.folder_formatter.format_lite(x),
+        fi.children_folder)
+    file_names = map(
+        lambda x: self.file_formatter.format_lite(x),
+        fi.children_file)
+    all_names = list(folder_names) + list(file_names)
+    nbc = self.nb_columns(all_names)
+    cs = self.column_sizes(all_names, nbc)
+
+    nb_lines = round(0.5 + (len(all_names) - 1) / nbc)
+    for i in range(0, nb_lines):
+      k = 0
+      new_line = InfoFormatter.alignleft(all_names[i], cs[k])
+      for j in range(i + nb_lines, len(all_names), nb_lines):
+        k += 1
+        new_line += " " * self.sbc + \
+            InfoFormatter.alignleft(all_names[j], cs[k])
+      print(new_line)
