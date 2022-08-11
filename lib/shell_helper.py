@@ -264,6 +264,8 @@ class OneDriveShell:
   def launch(self):
      # current_folder_info = mgc.get_folder_info("")
     current_folder_info = MsFolderInfo("", "", self.mgc)
+    current_folder_info.retrieve_children_info(
+        only_folders=self.only_folders, recursive=False)
 
     while True:
 
