@@ -307,8 +307,10 @@ class OneDriveShell:
       elif my_input.isdigit() and int(my_input) <= len(current_folder_info.children_folder):
 
         int_input = int(my_input)
-        if int_input == 0:
+        if int_input == 0 and current_folder_info.parent is not None:
           current_folder_info = current_folder_info.parent
+        elif int_input == 0 and current_folder_info.parent is None:
+          print("The current folder has no parent")
         else:
           current_folder_info = current_folder_info.children_folder[int(
               my_input) - 1]
@@ -325,7 +327,11 @@ class OneDriveShell:
         print("   set cs                : Set column size for name")
         print("   ls                    : List current folder")
         print("   <number>              : Dig into given folder")
+        print("   q")
         print("   quit                  : Quit Browser")
+
+      else:
+        print("unknown command")
 
       print("")
 
