@@ -269,7 +269,11 @@ class OneDriveShell:
     while True:
 
       prompt = current_folder_info.name
+
       my_input = input(f"{prompt}> ")
+      # Trim my_input and remove double spaces
+      my_input = " ".join(my_input.split())
+      my_input = my_input.replace(" = ", "=")
 
       if my_input == "quit":
         break
