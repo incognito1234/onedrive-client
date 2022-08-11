@@ -202,13 +202,9 @@ class MsFolderInfo(MsObject):
   def __str__(self):
     status_subfolders = "<subfolders ok>" if self.folders_have_been_retrieved() else ""
     status_subfiles = "<subfiles ok>" if self.files_have_been_retrieved() else ""
-    if not self.folders_have_been_retrieved():
-      result = "Folder - {0}/ ({1} - {2:,})".format(self.get_full_path()
-                                                    [1:], self.child_count, self.size)
-    else:
-      result = "Folder - {0}/ ({1})- <ok>".format(self.get_full_path()
-                                                  [1:], self.child_count)
-    result = f"Folder - {self.get_full_path()[1:]} - {self.child_count} {status_subfolders}{status_subfiles}"
+
+    fname = f"{self.name}/" if len(self.name) < 25 else f"{self.name[:20]}.../"
+    result = f"{self.size:>20,}  {fname:<25}  {self.child_count:>6}  {status_subfolders}{status_subfiles}"
     return result
 
   def str_full_details(self):
@@ -257,12 +253,9 @@ class MsFileInfo(MsObject):
   name = property(_get_name)
 
   def __str__(self):
-    result = "File - {0:35} - {1:>25} - {2:>20,} - {3}".format(
-        self.path,
-        self.__id,
-        self.size,
-        self.last_modified_datetime
-    )
+    fname = f"{self.name}" if len(self.name) < 25 else f"{self.name[:20]}..."
+    fmdt = self.last_modified_datetime.strftime("%Y-%m-%d %H:%M:%S")
+    result = f"{self.size:>20,}  {fname:<25}  {fmdt}  "
     return result
 
   def str_full_details(self):
@@ -302,13 +295,8 @@ class OneDriveShell:
 
     while True:
 
-      if current_folder_info.parent is not None:
-        print("  0 - <parent>")
-
-      current_folder_info.print_children(
-          start_number=1, only_folders=self.only_folders)
-
-      my_input = input("your command (or quit): ")
+      prompt = current_folder_info.name
+      my_input = input(f"{prompt}> ")
 
       if my_input == "quit":
         break
@@ -322,6 +310,12 @@ class OneDriveShell:
         else:
           current_folder_info = current_folder_info.children_folder[int(
               my_input) - 1]
+
+      elif my_input == "ls":
+        if current_folder_info.parent is not None:
+          print("  0 - <parent>")
+        current_folder_info.print_children(
+            start_number=1, only_folders=self.only_folders)
 
       elif my_input == "set onlyfolders" or my_input == "set of":
         self.only_folders = True
@@ -337,11 +331,8 @@ class OneDriveShell:
         print("   set of                : Retrieve info only about folders")
         print("   set noonlyfolders")
         print("   set noof              : Retrieve info about folders and files")
+        print("   ls                    : List current folder")
         print("   <number>              : Dig into given folder")
         print("   quit                  : Quit Browser")
-
-      else:
-        print("")
-        print(">>>>> ERROR >>>>>>>> Invalid command <<<<<<<<<<<")
 
       print("")
