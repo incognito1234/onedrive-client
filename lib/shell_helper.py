@@ -380,6 +380,10 @@ class InfoFormatter(ABC):
   def alignright(what, nb, fillchar=" "):
     return f"{(fillchar * (nb - len(what)))}{what}"
 
+  @staticmethod
+  def alignleft(what, nb, fillchar=" "):
+    return f"{what}{(fillchar * (nb - len(what)))}"
+
 
 class MsFolderFormatter(InfoFormatter):
 
@@ -394,7 +398,7 @@ class MsFolderFormatter(InfoFormatter):
     fname = f"{what.name}/" if len(
         what.name) < self.max_name_size else f"{what.name[:self.max_name_size - 5]}.../"
     result = (
-        f"{what.size:>20,}  {InfoFormatter.alignright(fname,self.max_name_size)}"
+        f"{what.size:>20,}  {InfoFormatter.alignleft(fname,self.max_name_size)}"
         f"  {what.child_count:>6}  {status_subfolders}{status_subfiles}")
     return result
 
@@ -408,5 +412,5 @@ class MsFileFormatter(InfoFormatter):
     fname = f"{what.name}" if len(
         what.name) < self.max_name_size else f"{what.name[:self.max_name_size - 5]}..."
     fmdt = what.last_modified_datetime.strftime("%Y-%m-%d %H:%M:%S")
-    result = f"{what.size:>20,}  {InfoFormatter.alignright(fname,self.max_name_size)}  {fmdt}  "
+    result = f"{what.size:>20,}  {InfoFormatter.alignleft(fname,self.max_name_size)}  {fmdt}  "
     return result
