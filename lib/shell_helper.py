@@ -60,12 +60,14 @@ class MsFolderInfo(MsObject):
     self.children_folder = []
     self.__dict_children_file = {}
     self.__dict_children_folder = {}
+    self.next_link_children = None
+
     self.parent = parent
     self.child_count = child_count
     self.size = size
 
-    self.__children_files_retrieval_status = None
-    self.__children_folders_retrieval_status = None
+    self.__children_files_retrieval_status = None    # None,"partial" or "all"
+    self.__children_folders_retrieval_status = None  # None, "partial" or "all"
 
   def get_full_path(self):
     return self.__full_path
@@ -88,21 +90,17 @@ class MsFolderInfo(MsObject):
         f"[retrieve_children_info] {self.get_full_path()} - only_folders = {only_folders} - depth = {depth}")
 
     if depth > 0 and (
-        only_folders and not self.folders_have_been_retrieved()
-        or not self.files_have_been_retrieved() or not self.folders_have_been_retrieved()
+        only_folders and not self.folders_retrieval_has_started()
+        or not self.files_retrieval_has_started() or not self.folders_retrieval_has_started()
     ):
 
-      ms_response = self.__mgc.get_ms_response_for_children_folder_path(
+      (ms_response, next_link) = self.__mgc.get_ms_response_for_children_folder_path(
           self.get_full_path(), only_folders)
-
-      self.__children_folders_retrieval_status = "in_progress"
-
-      if not only_folders:
-        self.__children_files_retrieval_status = "in_progress"
+      self.next_link_children = next_link
 
       for c in ms_response:
         isFolder = 'folder' in c
-        if isFolder and not self.folders_have_been_retrieved():
+        if isFolder and not self.folders_retrieval_has_started():
           fi = ObjectInfoFactory.MsFolderFromMgcResponse(self.__mgc, c, self)
           self.add_folder_info(fi)
           if recursive:
@@ -122,9 +120,52 @@ class MsFolderInfo(MsObject):
           f"[retrieve_children_info] {self.get_full_path()} - setting retrieval status")
 
       if not only_folders:
-        self.__children_files_retrieval_status = "all"
+        self.__children_files_retrieval_status = "partial" if self.next_link_children is not None else "all"
 
-      self.__children_folders_retrieval_status = "all"
+      self.__children_folders_retrieval_status = "partial" if self.next_link_children is not None else "all"
+
+  def retrieve_children_info_next(
+          self,
+          only_folders=False,
+          recursive=False,
+          depth=999):
+    self.__mgc.logger.log_debug(
+        f"[retrieve_children_info_next] {self.get_full_path()} - only_folders = {only_folders} - depth = {depth}")
+
+    if depth > 0 and (
+        only_folders and not self.__children_folders_retrieval_status != "all"
+        or self.__children_folders_retrieval_status != "all"
+    ):
+
+      (ms_response, next_link) = self.__mgc.get_ms_response_for_children_folder_path_from_link(
+          self.next_link_children, only_folders)
+      self.next_link_children = next_link
+
+      for c in ms_response:
+        isFolder = 'folder' in c
+        if isFolder:
+          fi = ObjectInfoFactory.MsFolderFromMgcResponse(self.__mgc, c, self)
+          self.add_folder_info(fi)
+          if recursive:
+            fi.retrieve_children_info(
+                only_folders=only_folders,
+                recursive=recursive,
+                depth=depth - 1)
+
+        elif not only_folders and not isFolder:
+          fi = ObjectInfoFactory.MsFileInfoFromMgcResponse(self.__mgc, c)
+          self.add_file_info(fi)
+        else:
+          self.__mgc.Logger.log_info(
+              "retrieve_children_info : UNKNOWN RESPONSE")
+
+      self.__mgc.logger.log_debug(
+          f"[retrieve_children_info_from_link] {self.next_link_children} - setting retrieval status")
+
+      if not only_folders:
+        self.__children_files_retrieval_status = "partial" if self.next_link_children is not None else "all"
+
+      self.__children_folders_retrieval_status = "partial" if self.next_link_children is not None else "all"
 
   def create_empty_subfolder(self, folder_name):
     creation_ok = self.__mgc.create_folder(self.get_full_path(), folder_name)
@@ -161,15 +202,21 @@ class MsFolderInfo(MsObject):
   def get_child_file(self, file_name):
     return self.__dict_children_file[file_name] if file_name in self.__dict_children_file else None
 
-  def files_have_been_retrieved(self):
+  def files_retrieval_has_started(self):
+    return self.__children_files_retrieval_status == "all" or self.__children_files_retrieval_status == "partial"
+
+  def folders_retrieval_has_started(self):
+    return self.__children_folders_retrieval_status == "all" or self.__children_folders_retrieval_status == "partial"
+
+  def files_retrieval_is_completed(self):
     return self.__children_files_retrieval_status == "all"
 
-  def folders_have_been_retrieved(self):
+  def folders_retrieval_is_completed(self):
     return self.__children_folders_retrieval_status == "all"
 
   def __str__(self):
-    status_subfolders = "<subfolders ok>" if self.folders_have_been_retrieved() else ""
-    status_subfiles = "<subfiles ok>" if self.files_have_been_retrieved() else ""
+    status_subfolders = "<subfolders ok>" if self.folders_retrieval_has_started() else ""
+    status_subfiles = "<subfiles ok>" if self.files_retrieval_has_started() else ""
 
     fname = f"{self.name}/" if len(self.name) < 25 else f"{self.name[:20]}.../"
     result = f"{self.size:>20,}  {fname:<25}  {self.child_count:>6}  {status_subfolders}{status_subfiles}"
@@ -270,6 +317,8 @@ class OneDriveShell:
     while True:
 
       prompt = current_folder_info.name
+      if current_folder_info.next_link_children is not None:
+        prompt += "..."
 
       my_input = input(f"{prompt}> ")
       # Trim my_input and remove double spaces
@@ -286,9 +335,11 @@ class OneDriveShell:
             current_folder_info, start_number=1, only_folders=self.only_folders)
 
       elif my_input == "ls":
-        if current_folder_info.parent is not None:
-          print("  0 - <parent>")
         self.ls_formatter.print_folder_children_lite(
+            current_folder_info, only_folders=self.only_folders)
+
+      elif my_input == "lls":
+        self.ls_formatter.print_folder_children_lite_next(
             current_folder_info, only_folders=self.only_folders)
 
       elif my_input == "set onlyfolders" or my_input == "set of":
@@ -369,8 +420,8 @@ class MsFolderFormatter(InfoFormatter):
 
   @beartype
   def format(self, what: MsFolderInfo):
-    status_subfolders = "<subfolders ok>" if what.folders_have_been_retrieved() else ""
-    status_subfiles = "<subfiles ok>" if what.files_have_been_retrieved() else ""
+    status_subfolders = "<subfolders ok>" if what.folders_retrieval_has_started() else ""
+    status_subfiles = "<subfiles ok>" if what.files_retrieval_has_started() else ""
 
     fname = f"{what.name}/" if len(
         what.name) < self.max_name_size else f"{what.name[:self.max_name_size - 5]}.../"
@@ -410,15 +461,16 @@ class LsFormatter():
     self.folder_formatter = folder_formatter
     self.sbc = 2  # Space between columns
 
+  @beartype
   def print_folder_children(
           self,
-          fi,
-          start_number=0,
-          recursive=False,
-          only_folders=True,
-          depth=999):
-    if ((not fi.folders_have_been_retrieved() and only_folders)
-            or (not fi.files_have_been_retrieved() and not only_folders)):
+          fi: MsFolderInfo,
+          start_number: int = 0,
+          recursive: bool = False,
+          only_folders: bool = True,
+          depth: int = 999):
+    if ((not fi.folders_retrieval_has_started() and only_folders)
+            or (not fi.files_retrieval_has_started() and not only_folders)):
       fi.retrieve_children_info(
           only_folders=only_folders,
           recursive=recursive,
@@ -503,9 +555,13 @@ class LsFormatter():
     else:
       return low
 
-  def print_folder_children_lite(self, fi, only_folders=True):
-    if ((not fi.folders_have_been_retrieved() and only_folders)
-            or (not fi.files_have_been_retrieved() and not only_folders)):
+  @beartype
+  def print_folder_children_lite(
+          self,
+          fi: MsFolderInfo,
+          only_folders: bool = True):
+    if ((not fi.folders_retrieval_has_started() and only_folders)
+            or (not fi.files_retrieval_has_started() and not only_folders)):
       fi.retrieve_children_info(only_folders=only_folders)
 
     folder_names = map(
@@ -527,3 +583,12 @@ class LsFormatter():
         new_line += " " * self.sbc + \
             InfoFormatter.alignleft(all_names[j], cs[k])
       print(new_line)
+
+  @beartype
+  def print_folder_children_lite_next(
+          self, fi: MsFolderInfo, only_folders: bool = True):
+    if ((not fi.folders_retrieval_is_completed() and only_folders)
+            or (not fi.files_retrieval_is_completed() and not only_folders)):
+      fi.retrieve_children_info_next(only_folders=only_folders)
+
+    self.print_folder_children_lite(fi, only_folders)

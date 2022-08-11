@@ -43,7 +43,7 @@ class MsGraphClient:
 
   def get_ms_response_for_children_folder_path(
           self, folder_path, only_folder=False):
-    """ Get response value of ms graph for getting children info of a onedrive folder
+    """ Get response value of ms graph for getting children info of a onedrive folder from folder path
     """
 
     # folder_path must start with '/'
@@ -52,13 +52,22 @@ class MsGraphClient:
     else:
       fp = '{0}/me/drive/root:{1}:/children'.format(
           MsGraphClient.graph_url, folder_path)
+    return self.get_ms_response_for_children_folder_path_from_link(
+        fp, only_folder)
+
+  def get_ms_response_for_children_folder_path_from_link(
+          self, link, only_folder=False):
+    """ Get response value of ms graph for getting children info of a onedrive folder from a given link
+    """
+
+    # folder_path must start with '/'
     if only_folder:
       param_urls = {'$filter': 'folder ne any',
                     '$select': 'name,folder,id,size,parentReference'}
     else:
       param_urls = ()
 
-    ms_response = self.mgc.get(fp, params=param_urls)
+    ms_response = self.mgc.get(link, params=param_urls)
 
     if 'error' in ms_response:
       return None
@@ -68,7 +77,7 @@ class MsGraphClient:
       else:
         next_link = None
 
-      return ms_response.json()['value']
+    return (ms_response.json()['value'], next_link)
 
   def download_file_content(self, dst_path, local_dst):
     # Inspired from https://gist.github.com/mvpotter/9088499
