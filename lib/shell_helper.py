@@ -411,7 +411,10 @@ class OneDriveShell:
       if my_input == "quit":
         break
 
-      if my_input == "ll":
+      if my_input == "pwd":
+        print(self.current_fi.path)
+
+      elif my_input == "ll":
         if self.current_fi.parent is not None:
           print("  0 - <parent>")
         self.ls_formatter.print_folder_children(
@@ -476,6 +479,7 @@ class OneDriveShell:
         print("   lls                   : Continue listing folder in case of large folder")
         print("   cd <folder path>      : Change to folder path")
         print("   ll                    : List Folder with details")
+        print("   pwd                   : Print full path of current folder")
         print("   <number>              : Dig into given folder")
         print("   q")
         print("   quit                  : Quit Browser")
