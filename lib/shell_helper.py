@@ -159,7 +159,7 @@ class MsFolderInfo(MsObject):
           fi = ObjectInfoFactory.MsFileInfoFromMgcResponse(self.__mgc, c)
           self.add_file_info(fi)
         else:
-          self.__mgc.Logger.log_info(
+          self.__mgc.logger.log_info(
               "retrieve_children_info : UNKNOWN RESPONSE")
 
       self.__mgc.logger.log_debug(
@@ -393,6 +393,7 @@ class OneDriveShell:
     cp = Completer(self)
     readline.parse_and_bind('tab: complete')
     readline.set_completer(cp.complete)
+    readline.set_completer_delims(" \t/")
 
     self.current_fi.retrieve_children_info(
         only_folders=self.only_folders, recursive=False)
