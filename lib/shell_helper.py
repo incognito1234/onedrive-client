@@ -8,6 +8,8 @@ from beartype import beartype
 from lib.oi_factory import ObjectInfoFactory
 from lib.graph_helper import MsGraphClient
 import os
+# readline introduce history management in prompt
+import readline
 
 
 class MsObject(ABC):
@@ -114,7 +116,7 @@ class MsFolderInfo(MsObject):
           fi = ObjectInfoFactory.MsFileInfoFromMgcResponse(self.__mgc, c)
           self.add_file_info(fi)
         else:
-          self.__mgc.Logger.log_info(
+          self.__mgc.logger.log_info(
               "retrieve_children_info : UNKNOWN RESPONSE")
 
       self.__mgc.logger.log_debug(
@@ -191,14 +193,40 @@ class MsFolderInfo(MsObject):
     self.children_file.append(file_info)
     self.__dict_children_file[file_info.name] = file_info
 
-  def is_child_folder(self, folder_name):
+  def is_direct_child_folder(
+          self,
+          folder_name,
+          force_children_retrieval=False):
+    if force_children_retrieval and not self.folders_retrieval_has_started:
+      self.retrieve_children_info(only_folders=True)
     return folder_name in self.__dict_children_folder
+
+  def is_child_folder(self, folder_path, force_children_retrieval=False):
+    return self.get_child_folder(
+        folder_path, force_children_retrieval) is not None
 
   def is_child_file(self, file_name):
     return file_name in self.__dict_children_file
 
-  def get_child_folder(self, folder_name):
+  def get_direct_child_folder(
+          self,
+          folder_name,
+          force_children_retrieval=False):
+    if force_children_retrieval and not self.folders_retrieval_has_started:
+      self.retrieve_children_info(only_folders=True)
     return self.__dict_children_folder[folder_name] if folder_name in self.__dict_children_folder else None
+
+  def get_child_folder(self, folder_path, force_children_retrieval=False):
+    path_parts = folder_path.split("/")
+    if path_parts[-1] == "":
+      path_parts = path_parts[:-1]
+    search_folder = self
+    for f in path_parts:
+      if search_folder.is_direct_child_folder(f, force_children_retrieval):
+        search_folder = search_folder.get_direct_child_folder(f)
+      else:
+        return None
+    return search_folder
 
   def get_child_file(self, file_name):
     return self.__dict_children_file[file_name] if file_name in self.__dict_children_file else None
@@ -299,26 +327,80 @@ class MsFileInfo(MsObject):
     return result
 
 
+class Completer:
+  def __init__(self, odshell):
+    self.shell = odshell
+    self.values = []
+
+  @beartype
+  def complete(self, text: str, state: int):
+    line = readline.get_line_buffer()
+    try:
+      if line.startswith("cd "):
+        if state == 0:
+          folder_names_str = line[3:]
+          folder_names = folder_names_str.split("/")
+          if folder_names_str[:-1] == "/":
+            start_text = ""
+          else:
+            start_text = folder_names[-1]
+            folder_names = folder_names[:-1]
+
+          search_folder = self.shell.current_fi
+
+          for f in folder_names:
+            if search_folder.is_child_folder(f):
+              search_folder = search_folder.get_direct_child_folder(f, True)
+            else:
+              break
+
+          search_folder.retrieve_children_info(only_folders=True)
+          folders = map(lambda x: x.name, search_folder.children_folder)
+          folders = filter(lambda x: x.startswith(start_text), folders)
+          folders = map(lambda x: f"{x}/", folders)
+          self.values = list(folders)
+
+        if state < len(self.values):
+          return self.values[state]
+        else:
+          return None
+
+      return None
+    except Exception as e:
+      print(f"Exception = {e}")
+
+
 class OneDriveShell:
 
   def __init__(self, mgc):
     self.mgc = mgc
+    self.current_fi = MsFolderInfo("", "", self.mgc)
+    self.root_folder = self.current_fi
     self.only_folders = False
     self.ls_formatter = LsFormatter(MsFileFormatter(45), MsFolderFormatter(45))
 
   def change_max_column_size(self, nb):
     self.ls_formatter = LsFormatter(MsFileFormatter(nb), MsFolderFormatter(nb))
 
+  def change_current_folder_to_parent(self):
+    if self.current_fi.parent is not None:
+      self.current_fi = self.current_fi.parent
+    else:
+      print("The current folder has no parent")
+
   def launch(self):
-     # current_folder_info = mgc.get_folder_info("")
-    current_folder_info = MsFolderInfo("", "", self.mgc)
-    current_folder_info.retrieve_children_info(
+
+    cp = Completer(self)
+    readline.parse_and_bind('tab: complete')
+    readline.set_completer(cp.complete)
+
+    self.current_fi.retrieve_children_info(
         only_folders=self.only_folders, recursive=False)
 
     while True:
 
-      prompt = current_folder_info.name
-      if current_folder_info.next_link_children is not None:
+      prompt = self.current_fi.name
+      if self.current_fi.next_link_children is not None:
         prompt += "..."
 
       my_input = input(f"{prompt}> ")
@@ -330,18 +412,18 @@ class OneDriveShell:
         break
 
       if my_input == "ll":
-        if current_folder_info.parent is not None:
+        if self.current_fi.parent is not None:
           print("  0 - <parent>")
         self.ls_formatter.print_folder_children(
-            current_folder_info, start_number=1, only_folders=self.only_folders)
+            self.current_fi, start_number=1, only_folders=self.only_folders)
 
       elif my_input == "ls":
         self.ls_formatter.print_folder_children_lite(
-            current_folder_info, only_folders=self.only_folders)
+            self.current_fi, only_folders=self.only_folders)
 
       elif my_input == "lls":
         self.ls_formatter.print_folder_children_lite_next(
-            current_folder_info, only_folders=self.only_folders)
+            self.current_fi, only_folders=self.only_folders)
 
       elif my_input == "set onlyfolders" or my_input == "set of":
         self.only_folders = True
@@ -361,16 +443,24 @@ class OneDriveShell:
           else:
             self.change_max_column_size(int_cs)
 
-      elif my_input.isdigit() and int(my_input) <= len(current_folder_info.children_folder):
+      elif my_input.startswith("cd "):
+        folder_path = my_input[3:]
+        if folder_path == "..":
+          self.change_current_folder_to_parent()
+
+        if self.current_fi.is_child_folder(folder_path):
+          self.current_fi = self.current_fi.get_child_folder(folder_path)
+
+      elif my_input == "cd..":
+        self.change_current_folder_to_parent()
+
+      elif my_input.isdigit() and int(my_input) <= len(self.current_fi.children_folder):
 
         int_input = int(my_input)
-        if int_input == 0 and current_folder_info.parent is not None:
-          current_folder_info = current_folder_info.parent
-        elif int_input == 0 and current_folder_info.parent is None:
-          print("The current folder has no parent")
+        if int_input == 0:
+          self.change_current_folder_to_parent()
         else:
-          current_folder_info = current_folder_info.children_folder[int(
-              my_input) - 1]
+          self.current_fi = self.current_fi.children_folder[int(my_input) - 1]
 
       elif my_input == "help" or my_input == "h":
         print("Onedrive Browser Help")
@@ -383,6 +473,8 @@ class OneDriveShell:
         print("   set columnsize")
         print("   set cs                : Set column size for name")
         print("   ls                    : List current folder by columns")
+        print("   lls                   : Continue listing folder in case of large folder")
+        print("   cd <folder path>      : Change to folder path")
         print("   ll                    : List Folder with details")
         print("   <number>              : Dig into given folder")
         print("   q")
