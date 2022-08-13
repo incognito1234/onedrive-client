@@ -7,6 +7,7 @@ import math
 from beartype import beartype
 from lib.oi_factory import ObjectInfoFactory
 from lib.graph_helper import MsGraphClient
+from lib.log import Logger
 import os
 # readline introduce history management in prompt
 import readline
@@ -328,12 +329,44 @@ class MsFileInfo(MsObject):
 
 
 class Completer:
-  def __init__(self, odshell):
+
+  #
+  # Everything is replaced in the readline buffer to managed folder name with space
+  #
+  # To avoid misunderstanding, only the folder name is displayed in the match list
+  #
+
+  def __init__(self, odshell, lg=None):
     self.shell = odshell
     self.values = []
+    self.start_line = ""
+    self.columns_printer = ColumnsPrinter(2)
+    self.lg = lg
+
+  def __log_debug(self, what):
+    if self.lg is not None:
+      self.lg.log_debug(what)
+
+  def display_matches(self, what, matches, longest_match_length):
+    try:
+      self.__log_debug(f"[display matches]dm('{what}',{matches})")
+      print("")
+
+      # remove start_line from matches
+      to_be_printed = list(map(lambda x: x[len(self.start_line):], matches))
+      self.columns_printer.print_with_columns(to_be_printed)
+      print(
+          f"{self.shell.get_prompt()}{readline.get_line_buffer()}",
+          end="",
+          flush=True)
+
+    except Exception as e:
+      print(f"Exception = {e}")
 
   @beartype
   def complete(self, text: str, state: int):
+
+    self.__log_debug(f"[complete]complete('{text}',{state})")
     line = readline.get_line_buffer()
     try:
       if line.startswith("cd "):
@@ -346,6 +379,8 @@ class Completer:
             start_text = folder_names[-1]
             folder_names = folder_names[:-1]
 
+          self.start_line = text[:-len(start_text)
+                                 ] if len(start_text) != 0 else text
           search_folder = self.shell.current_fi
 
           for f in folder_names:
@@ -357,10 +392,12 @@ class Completer:
           search_folder.retrieve_children_info(only_folders=True)
           folders = map(lambda x: x.name, search_folder.children_folder)
           folders = filter(lambda x: x.startswith(start_text), folders)
-          folders = map(lambda x: f"{x}/", folders)
+          folders = map(lambda x: f"{self.start_line}{x}/", folders)
           self.values = list(folders)
+          self.__log_debug(f"[complete]values = {','.join(self.values)}")
 
         if state < len(self.values):
+          self.__log_debug(f"[complete]  --> return {self.values[state]}")
           return self.values[state]
         else:
           return None
@@ -388,23 +425,30 @@ class OneDriveShell:
     else:
       print("The current folder has no parent")
 
+  def get_prompt(self):
+    result = self.current_fi.name
+    if self.current_fi.next_link_children is not None:
+      result += "..."
+    result += "> "
+    return result
+
   def launch(self):
 
+    # cp = Completer(self, lg=Logger("./log_complete.txt", 4))
     cp = Completer(self)
+
     readline.parse_and_bind('tab: complete')
     readline.set_completer(cp.complete)
-    readline.set_completer_delims(" \t/")
+    readline.set_completion_display_matches_hook(cp.display_matches)
+    # All line content will be managed by complemtion
+    readline.set_completer_delims("")
 
     self.current_fi.retrieve_children_info(
         only_folders=self.only_folders, recursive=False)
 
     while True:
 
-      prompt = self.current_fi.name
-      if self.current_fi.next_link_children is not None:
-        prompt += "..."
-
-      my_input = input(f"{prompt}> ")
+      my_input = input(f"{self.get_prompt()}")
       # Trim my_input and remove double spaces
       my_input = " ".join(my_input.split())
       my_input = my_input.replace(" = ", "=")
@@ -557,7 +601,7 @@ class LsFormatter():
                folder_formatter: MsFolderFormatter):
     self.file_formatter = file_formatter
     self.folder_formatter = folder_formatter
-    self.sbc = 2  # Space between columns
+    self.column_printer = ColumnsPrinter(2)
 
   @beartype
   def print_folder_children(
@@ -591,6 +635,39 @@ class LsFormatter():
         i += nb_children
 
     return i - start_number
+
+  @beartype
+  def print_folder_children_lite(
+          self,
+          fi: MsFolderInfo,
+          only_folders: bool = True):
+    if ((not fi.folders_retrieval_has_started() and only_folders)
+            or (not fi.files_retrieval_has_started() and not only_folders)):
+      fi.retrieve_children_info(only_folders=only_folders)
+
+    folder_names = map(
+        lambda x: self.folder_formatter.format_lite(x),
+        fi.children_folder)
+    file_names = map(
+        lambda x: self.file_formatter.format_lite(x),
+        fi.children_file)
+    all_names = list(folder_names) + list(file_names)
+    self.column_printer.print_with_columns(all_names)
+
+  @beartype
+  def print_folder_children_lite_next(
+          self, fi: MsFolderInfo, only_folders: bool = True):
+    if ((not fi.folders_retrieval_is_completed() and only_folders)
+            or (not fi.files_retrieval_is_completed() and not only_folders)):
+      fi.retrieve_children_info_next(only_folders=only_folders)
+
+    self.print_folder_children_lite(fi, only_folders)
+
+
+class ColumnsPrinter():
+
+  def __init__(self, sbc):
+    self.sbc = sbc  # space between column
 
   def is_printable(self, max_len_line, elts, nb_columns):
     nb_elts = len(elts)
@@ -655,39 +732,15 @@ class LsFormatter():
     else:
       return low
 
-  @beartype
-  def print_folder_children_lite(
-          self,
-          fi: MsFolderInfo,
-          only_folders: bool = True):
-    if ((not fi.folders_retrieval_has_started() and only_folders)
-            or (not fi.files_retrieval_has_started() and not only_folders)):
-      fi.retrieve_children_info(only_folders=only_folders)
-
-    folder_names = map(
-        lambda x: self.folder_formatter.format_lite(x),
-        fi.children_folder)
-    file_names = map(
-        lambda x: self.file_formatter.format_lite(x),
-        fi.children_file)
-    all_names = list(folder_names) + list(file_names)
-    nbc = self.nb_columns(all_names)
-    cs = self.column_sizes(all_names, nbc)
-    nb_lines = 1 + math.floor((len(all_names) - 1) / nbc)
+  def print_with_columns(self, what):
+    # what : string list to be printed
+    nbc = self.nb_columns(what)
+    cs = self.column_sizes(what, nbc)
+    nb_lines = 1 + math.floor((len(what) - 1) / nbc)
     for i in range(0, nb_lines):
       k = 0
-      new_line = InfoFormatter.alignleft(all_names[i], cs[k])
-      for j in range(i + nb_lines, len(all_names), nb_lines):
+      new_line = InfoFormatter.alignleft(what[i], cs[k])
+      for j in range(i + nb_lines, len(what), nb_lines):
         k += 1
-        new_line += " " * self.sbc + \
-            InfoFormatter.alignleft(all_names[j], cs[k])
+        new_line += " " * self.sbc + InfoFormatter.alignleft(what[j], cs[k])
       print(new_line)
-
-  @beartype
-  def print_folder_children_lite_next(
-          self, fi: MsFolderInfo, only_folders: bool = True):
-    if ((not fi.folders_retrieval_is_completed() and only_folders)
-            or (not fi.files_retrieval_is_completed() and not only_folders)):
-      fi.retrieve_children_info_next(only_folders=only_folders)
-
-    self.print_folder_children_lite(fi, only_folders)
