@@ -122,6 +122,7 @@ class MsFolderInfo(MsObject):
           self.__mgc.logger.log_info(
               "retrieve_children_info : UNKNOWN RESPONSE")
 
+      self.__add_default_folder_info()
       self.__mgc.logger.log_debug(
           f"[retrieve_children_info] {self.get_full_path()} - setting retrieval status")
 
@@ -191,6 +192,11 @@ class MsFolderInfo(MsObject):
   def add_folder_info(self, folder_info):
     self.children_folder.append(folder_info)
     self.__dict_children_folder[folder_info.name] = folder_info
+
+  def __add_default_folder_info(self):
+    # add subfolder "." and "..""
+    self.__dict_children_folder["."] = self
+    self.__dict_children_folder[".."] = self.parent
 
   def add_file_info(self, file_info):
     self.children_file.append(file_info)
@@ -530,7 +536,10 @@ class OneDriveShell:
       my_input = " ".join(my_input.split())
       my_input = my_input.replace(" = ", "=")
       parts_cmd = shlex.split(my_input)
-      cmd = parts_cmd[0]
+      if len(parts_cmd) > 0:
+        cmd = parts_cmd[0]
+      else:
+        cmd = ""
 
       if cmd == "quit":
         break
@@ -553,7 +562,8 @@ class OneDriveShell:
             self.current_fi, only_folders=self.only_folders)
 
       elif cmd == "cd":
-        self.change_to_rel_path(parts_cmd[1])
+        if len(parts_cmd) == 2:
+          self.change_to_path(parts_cmd[1])
 
       elif cmd == "cd..":
         self.change_current_folder_to_parent()
@@ -609,17 +619,17 @@ class OneDriveShell:
       else:
         print("unknown command")
 
-  def change_to_rel_path(self, folder_path):
-
-    if folder_path == "..":
-      self.change_current_folder_to_parent()
+  def change_to_path(self, folder_path):
 
     # Compute relative path from root_folder
-    full_path = os.path.normpath(
-        self.current_fi.get_full_path() +
-        os.sep +
-        folder_path)[
-        1:]
+    if folder_path[0] != os.sep:
+      full_path = os.path.normpath(
+          self.current_fi.get_full_path() +
+          os.sep +
+          folder_path)[
+          1:]
+    else:
+      full_path = os.path.normpath(folder_path[1:])
 
     if self.root_folder.is_child_folder(full_path):
       self.current_fi = self.root_folder.get_child_folder(full_path)
