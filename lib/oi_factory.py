@@ -26,9 +26,17 @@ class ObjectInfoFactory:
 
   @staticmethod
   def MsFolderFromMgcResponse(mgc, mgc_response_json, parent=None):
+
+    # Workaround following what seems to be a bug. Space is replaced by "%20" sequence
+    #   in mgc_response when parent name contains a space
+    if parent is not None:
+      parent_path = parent.get_full_path()
+    else:
+      parent_path = mgc_response_json['parentReference']['path'][12:]
+
     return lib.shell_helper.MsFolderInfo(
         full_path="{0}/{1}".format(
-            mgc_response_json['parentReference']['path'][12:],
+            parent_path,
             mgc_response_json['name']),
         name=mgc_response_json['name'],
         mgc=mgc,

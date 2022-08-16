@@ -379,11 +379,8 @@ class Completer:
   #
   # Everything is replaced in the readline buffer to managed folder name with space
   #
-  # To avoid misunderstanding, only the folder name is displayed in the match list
-  #
-  #  Full Path           Replaced full path
-  #  Perso               /Perso/
-  #  /Pro/00-EURL        Pro/00-EURL
+  # To avoid misunderstanding, only the folder name is displayed in the
+  # match list
 
   def __init__(self, odshell, lg=None):
     self.shell = odshell
