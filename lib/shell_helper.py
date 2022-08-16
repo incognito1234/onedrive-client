@@ -8,7 +8,9 @@ from beartype import beartype
 from lib.oi_factory import ObjectInfoFactory
 from lib.graph_helper import MsGraphClient
 from lib.log import Logger
+
 import os
+import shlex
 # readline introduce history management in prompt
 import readline
 
@@ -261,6 +263,9 @@ class MsFolderInfo(MsObject):
 
     return result
 
+  def __repr__(self):
+    return f"Folder({self.name})"
+
 
 class MsFileInfo(MsObject):
   def __init__(
@@ -327,6 +332,41 @@ class MsFileInfo(MsObject):
 
     return result
 
+  def __repr__(self):
+    return f"File({self.name})"
+
+
+class StrPathUtil:
+  __TO_BE_ESCAPED = ('\\', ' ', '\'')  # \\ MUST be the first one
+
+  @staticmethod
+  def escape_str(what):
+    result = what
+    for c in StrPathUtil.__TO_BE_ESCAPED:
+      result = result.replace(c, f"\\{c}")
+
+    return result
+
+  @staticmethod
+  def split_path(full_path):
+    fp = full_path
+    # fp = shlex.split(full_path)[0]  # remove quote and escape sequence
+    fp = os.path.normpath(fp)
+    result = []
+    while (fp != os.sep) and (fp != ""):
+      parts = os.path.split(fp)
+      fp = parts[0]
+      result.append(parts[1])
+    if fp != "":         # Append root path if available
+      result.append("")
+    result.reverse()
+    return result
+
+  @staticmethod
+  def test():
+    ip = input("> ")
+    print(f"result = {StrPathUtil.escape_str(ip)}")
+
 
 class Completer:
 
@@ -335,17 +375,21 @@ class Completer:
   #
   # To avoid misunderstanding, only the folder name is displayed in the match list
   #
+  #  Full Path           Replaced full path
+  #  Perso               /Perso/
+  #  /Pro/00-EURL        Pro/00-EURL
 
   def __init__(self, odshell, lg=None):
     self.shell = odshell
     self.values = []
     self.start_line = ""
+    self.new_start_line = ""
     self.columns_printer = ColumnsPrinter(2)
     self.lg = lg
 
   def __log_debug(self, what):
     if self.lg is not None:
-      self.lg.log_debug(what)
+      self.lg.log_debug(f"[complete]{what}")
 
   def display_matches(self, what, matches, longest_match_length):
     try:
@@ -353,7 +397,8 @@ class Completer:
       print("")
 
       # remove start_line from matches
-      to_be_printed = list(map(lambda x: x[len(self.start_line):], matches))
+      to_be_printed = list(
+          map(lambda x: x[len(self.new_start_line):], matches))
       self.columns_printer.print_with_columns(to_be_printed)
       print(
           f"{self.shell.get_prompt()}{readline.get_line_buffer()}",
@@ -363,48 +408,80 @@ class Completer:
     except Exception as e:
       print(f"Exception = {e}")
 
+  def __get_cmd_parts_with_quotation_guess(self, input):
+    try:
+      return shlex.split(input)
+
+    except ValueError as e:
+      try:
+        return shlex.split(input + "'")
+
+      except ValueError as e:
+        return shlex.split(input + '"')
+
   @beartype
   def complete(self, text: str, state: int):
 
-    self.__log_debug(f"[complete]complete('{text}',{state})")
+    self.__log_debug(f"complete('{text}',{state})")
     line = readline.get_line_buffer()
     try:
-      if line.startswith("cd "):
+
+      parts_cmd = self.__get_cmd_parts_with_quotation_guess(line)
+
+      if len(parts_cmd) > 0 and parts_cmd[0] == "cd":
+
         if state == 0:
-          folder_names_str = line[3:]
-          folder_names = folder_names_str.split("/")
-          if folder_names_str[:-1] == "/":
-            start_text = ""
+          # Get last part of full_path and extract start_text of folder name
+          if len(parts_cmd) > 1:
+            folder_names_str = parts_cmd[1]
+            folder_names = StrPathUtil.split_path(folder_names_str)
+            if folder_names_str[-1] == os.sep:
+              start_text = ""
+            else:
+              start_text = folder_names[-1]
+              # remove the last folder name which is the start text
+              folder_names = folder_names[:-1]
+              folder_names_str = os.sep.join(folder_names)
+              if len(folder_names) > 0:  # was 1 before removing
+                folder_names_str = folder_names_str + os.sep
           else:
-            start_text = folder_names[-1]
-            folder_names = folder_names[:-1]
+            folder_names_str = ""
+            folder_names = []
+            start_text = ""
 
-          self.start_line = text[:-len(start_text)
-                                 ] if len(start_text) != 0 else text
+          # Extract start of text to be escaped if necessary
+          self.new_start_line = "cd " + \
+              StrPathUtil.escape_str(folder_names_str)
+
+          # Get folder info of last folders in given path
           search_folder = self.shell.current_fi
-
           for f in folder_names:
             if search_folder.is_child_folder(f):
               search_folder = search_folder.get_direct_child_folder(f, True)
             else:
               break
 
+          # Compute list of substitute string
+          #   1. Compute folder names
+          #   2. Keep folders whose name starts with start_text
+          #   2. Add escaped folder name
           search_folder.retrieve_children_info(only_folders=True)
           folders = map(lambda x: x.name, search_folder.children_folder)
           folders = filter(lambda x: x.startswith(start_text), folders)
-          folders = map(lambda x: f"{self.start_line}{x}/", folders)
+          folders = map(lambda x: StrPathUtil.escape_str(x), folders)
+          folders = map(lambda x: f"{self.new_start_line}{x}/", folders)
           self.values = list(folders)
-          self.__log_debug(f"[complete]values = {','.join(self.values)}")
+          self.__log_debug(f"values = {','.join(self.values)}")
 
         if state < len(self.values):
-          self.__log_debug(f"[complete]  --> return {self.values[state]}")
+          self.__log_debug(f"  --> return {self.values[state]}")
           return self.values[state]
         else:
           return None
 
       return None
     except Exception as e:
-      print(f"Exception = {e}")
+      print(f"[complete]Exception = {e}")
 
 
 class OneDriveShell:
@@ -434,8 +511,8 @@ class OneDriveShell:
 
   def launch(self):
 
-    # cp = Completer(self, lg=Logger("./log_complete.txt", 4))
-    cp = Completer(self)
+    cp = Completer(self, lg=Logger("./log_complete.txt", 4))
+    #cp = Completer(self)
 
     readline.parse_and_bind('tab: complete')
     readline.set_completer(cp.complete)
@@ -452,26 +529,42 @@ class OneDriveShell:
       # Trim my_input and remove double spaces
       my_input = " ".join(my_input.split())
       my_input = my_input.replace(" = ", "=")
+      parts_cmd = shlex.split(my_input)
+      cmd = parts_cmd[0]
 
-      if my_input == "quit":
+      if cmd == "quit":
         break
 
-      if my_input == "pwd":
+      if cmd == "pwd":
         print(self.current_fi.path)
 
-      elif my_input == "ll":
+      elif cmd == "ll":
         if self.current_fi.parent is not None:
           print("  0 - <parent>")
         self.ls_formatter.print_folder_children(
             self.current_fi, start_number=1, only_folders=self.only_folders)
 
-      elif my_input == "ls":
+      elif cmd == "ls":
         self.ls_formatter.print_folder_children_lite(
             self.current_fi, only_folders=self.only_folders)
 
-      elif my_input == "lls":
+      elif cmd == "lls":
         self.ls_formatter.print_folder_children_lite_next(
             self.current_fi, only_folders=self.only_folders)
+
+      elif cmd == "cd":
+        self.change_to_rel_path(parts_cmd[1])
+
+      elif cmd == "cd..":
+        self.change_current_folder_to_parent()
+
+      elif cmd.isdigit() and int(cmd) <= len(self.current_fi.children_folder):
+
+        int_input = int(cmd)
+        if int_input == 0:
+          self.change_current_folder_to_parent()
+        else:
+          self.current_fi = self.current_fi.children_folder[int(my_input) - 1]
 
       elif my_input == "set onlyfolders" or my_input == "set of":
         self.only_folders = True
@@ -491,26 +584,7 @@ class OneDriveShell:
           else:
             self.change_max_column_size(int_cs)
 
-      elif my_input.startswith("cd "):
-        folder_path = my_input[3:]
-        if folder_path == "..":
-          self.change_current_folder_to_parent()
-
-        if self.current_fi.is_child_folder(folder_path):
-          self.current_fi = self.current_fi.get_child_folder(folder_path)
-
-      elif my_input == "cd..":
-        self.change_current_folder_to_parent()
-
-      elif my_input.isdigit() and int(my_input) <= len(self.current_fi.children_folder):
-
-        int_input = int(my_input)
-        if int_input == 0:
-          self.change_current_folder_to_parent()
-        else:
-          self.current_fi = self.current_fi.children_folder[int(my_input) - 1]
-
-      elif my_input == "help" or my_input == "h":
+      elif cmd == "help" or cmd == "h":
         print("Onedrive Browser Help")
         print("")
         print("COMMAND")
@@ -529,11 +603,26 @@ class OneDriveShell:
         print("   q")
         print("   quit                  : Quit Browser")
 
-      elif my_input == "":
+      elif cmd == "":
         pass
 
       else:
         print("unknown command")
+
+  def change_to_rel_path(self, folder_path):
+
+    if folder_path == "..":
+      self.change_current_folder_to_parent()
+
+    # Compute relative path from root_folder
+    full_path = os.path.normpath(
+        self.current_fi.get_full_path() +
+        os.sep +
+        folder_path)[
+        1:]
+
+    if self.root_folder.is_child_folder(full_path):
+      self.current_fi = self.root_folder.get_child_folder(full_path)
 
 
 class InfoFormatter(ABC):
