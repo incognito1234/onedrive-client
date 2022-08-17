@@ -1,18 +1,21 @@
 #  Copyright 2019-2022 Jareth Lomson <jareth.lomson@gmail.com>
 #  This file is part of OneDrive Client Program which is released under MIT License
 #  See file LICENSE for full license details
-from re import fullmatch
-from abc import ABC, abstractmethod
 import math
-from beartype import beartype
-from lib.oi_factory import ObjectInfoFactory
-from lib.graph_helper import MsGraphClient
-from lib.log import Logger
-
 import os
-import shlex
+from platform import platform
+import sys
 # readline introduce history management in prompt
 import readline
+import shlex
+from abc import ABC, abstractmethod
+from re import fullmatch
+
+from beartype import beartype
+
+from lib.graph_helper import MsGraphClient
+from lib.log import Logger
+from lib.oi_factory import ObjectInfoFactory
 
 
 class MsObject(ABC):
@@ -343,7 +346,8 @@ class MsFileInfo(MsObject):
 
 
 class StrPathUtil:
-  __TO_BE_ESCAPED = ('\\', ' ', '\'')  # \\ MUST be the first one
+  __TO_BE_ESCAPED = ('\\', ' ', '\'') if sys.platform != "win32" else (
+      ' ')  # \\ MUST be the first one
 
   @staticmethod
   def escape_str(what):
@@ -413,6 +417,7 @@ class Completer:
 
   def __get_cmd_parts_with_quotation_guess(self, input):
     try:
+      # WARNING: does not work with win32 if a backslash is included in input
       return shlex.split(input)
 
     except ValueError as e:
@@ -468,11 +473,10 @@ class Completer:
           #   1. Compute folder names
           #   2. Keep folders whose name starts with start_text
           #   2. Add escaped folder name
-          search_folder.retrieve_children_info(only_folders=True)
           folders = map(lambda x: x.name, search_folder.children_folder)
           folders = filter(lambda x: x.startswith(start_text), folders)
           folders = map(lambda x: StrPathUtil.escape_str(x), folders)
-          folders = map(lambda x: f"{self.new_start_line}{x}/", folders)
+          folders = map(lambda x: f"{self.new_start_line}{x}{os.sep}", folders)
           self.values = list(folders)
           self.__log_debug(f"values = {','.join(self.values)}")
 
@@ -519,7 +523,8 @@ class OneDriveShell:
 
     readline.parse_and_bind('tab: complete')
     readline.set_completer(cp.complete)
-    readline.set_completion_display_matches_hook(cp.display_matches)
+    if sys.platform != "win32":
+      readline.set_completion_display_matches_hook(cp.display_matches)
     # All line content will be managed by complemtion
     readline.set_completer_delims("")
 
