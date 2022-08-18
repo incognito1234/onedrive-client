@@ -436,7 +436,14 @@ class Completer:
 
       parts_cmd = self.__get_cmd_parts_with_quotation_guess(line)
 
-      if len(parts_cmd) > 0 and parts_cmd[0] == "cd":
+      if len(parts_cmd) > 0 and (
+              parts_cmd[0] == "cd" or parts_cmd[0] == "get"):
+
+        #
+        # Complete with remote folder or file
+        #
+
+        cmd = parts_cmd[0]
 
         if state == 0:
           # Get last part of full_path and extract start_text of folder name
@@ -458,7 +465,7 @@ class Completer:
             start_text = ""
 
           # Extract start of text to be escaped if necessary
-          self.new_start_line = "cd " + \
+          self.new_start_line = cmd + " " + \
               StrPathUtil.escape_str(folder_names_str)
 
           # Get folder info of last folders in given path
@@ -471,12 +478,21 @@ class Completer:
 
           # Compute list of substitute string
           #   1. Compute folder names
-          #   2. Keep folders whose name starts with start_text
-          #   2. Add escaped folder name
-          folders = map(lambda x: x.name, search_folder.children_folder)
+          #   2. Append os.sep to all folders
+          #   3. Keep folders whose name starts with start_text
+          #   4. Add escaped folder name
+          search_folder.retrieve_children_info(only_folders=(cmd == "cd"))
+          all_children = search_folder.children_folder
+          # a=MsFolderInfo("k","l",mgc)
+          # a.retrieve_children_info(only_folders=False)
+          if cmd == "get":
+            all_children += search_folder.children_file
+          folders = map(
+              lambda x: f"{x.name}{os.sep if isinstance(x, MsFolderInfo) else ''}",
+              all_children)
           folders = filter(lambda x: x.startswith(start_text), folders)
           folders = map(lambda x: StrPathUtil.escape_str(x), folders)
-          folders = map(lambda x: f"{self.new_start_line}{x}{os.sep}", folders)
+          folders = map(lambda x: f"{self.new_start_line}{x}", folders)
           self.values = list(folders)
           self.__log_debug(f"values = {','.join(self.values)}")
 
@@ -493,7 +509,8 @@ class Completer:
 
 class OneDriveShell:
 
-  def __init__(self, mgc):
+  @beartype
+  def __init__(self, mgc: MsGraphClient):
     self.mgc = mgc
     self.current_fi = MsFolderInfo("", "", self.mgc)
     self.root_folder = self.current_fi
@@ -567,6 +584,21 @@ class OneDriveShell:
         if len(parts_cmd) == 2:
           self.change_to_path(parts_cmd[1])
 
+      elif cmd == "get":
+        if len(parts_cmd) == 2:
+          self.mgc.download_file_content(parts_cmd[1], os.getcwd())
+
+      elif cmd == "!pwd":
+        print(os.getcwd())
+
+      elif cmd == "!cd":
+        if len(parts_cmd) == 2:
+          os.chdir(parts_cmd[1])
+          print(os.getcwd())
+
+      elif cmd[0:3] == "!ls":
+        os.system(my_input[1:])
+
       elif cmd == "cd..":
         self.change_current_folder_to_parent()
 
@@ -609,9 +641,13 @@ class OneDriveShell:
         print("   ls                    : List current folder by columns")
         print("   lls                   : Continue listing folder in case of large folder")
         print("   cd <folder path>      : Change to folder path")
+        print("   get <file_path>       : Download <file_path> in current folder")
         print("   ll                    : List Folder with details")
         print("   pwd                   : Print full path of current folder")
         print("   <number>              : Dig into given folder")
+        print("   !pwd                  : Print local folder")
+        print("   !cd <folder>          : Change to local folder")
+        print("   !ls                   : List children of local folder")
         print("   q")
         print("   quit                  : Quit Browser")
 
