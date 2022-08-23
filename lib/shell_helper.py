@@ -483,11 +483,12 @@ class Completer:
           #   3. Keep folders whose name starts with start_text
           #   4. Add escaped folder name
           search_folder.retrieve_children_info(only_folders=(cmd == "cd"))
-          all_children = search_folder.children_folder
           # a=MsFolderInfo("k","l",mgc)
           # a.retrieve_children_info(only_folders=False)
           if cmd == "get":
-            all_children += search_folder.children_file
+            all_children = search_folder.children_folder + search_folder.children_file
+          else:
+            all_children = search_folder.children_folder
           folders = map(
               lambda x: f"{x.name}{os.sep if isinstance(x, MsFolderInfo) else ''}",
               all_children)
