@@ -405,9 +405,12 @@ class Completer:
       self.__log_debug(f"[display matches]dm('{what}',{matches})")
       print("")
 
-      # remove start_line from matches
+      # remove start_line from matches and convert to FormattedString
+      to_be_printed_str = map(lambda x: x[len(self.new_start_line):], matches)
       to_be_printed = list(
-          map(lambda x: x[len(self.new_start_line):], matches))
+          map(
+              lambda x: FormattedString.build_from_string(x),
+              to_be_printed_str))
       self.columns_printer.print_with_columns(to_be_printed)
       print(
           f"{self.shell.get_prompt()}{readline.get_line_buffer()}",
@@ -678,6 +681,45 @@ class OneDriveShell:
       self.current_fi = self.root_folder.get_child_folder(full_path)
 
 
+class FormattedString():
+  """
+    Class to manage difference between String that is printed and String
+    that is stored.
+    Usefull when String are colorized or stylished because some specific
+    non-printable characters are used.
+  """
+
+  def __init__(self, str_to_be_printed, str_raw, len_to_be_printed):
+    self.to_be_printed = str_to_be_printed
+    self.raw = str_raw
+    self.len_to_be_printed = len_to_be_printed
+
+  @staticmethod
+  @beartype
+  def build_from_string(what: str):
+    return FormattedString(what, what, len(what))
+
+  @staticmethod
+  @beartype
+  def build_from_colorized_string(what: str, raw_what: str):
+    return FormattedString(what, raw_what, len(raw_what))
+
+  @staticmethod
+  def concat(*args):
+    result = FormattedString("", "", 0)
+    for s in args:
+      if isinstance(s, str):
+        result.to_be_printed += s
+        result.raw += s
+        result.len_to_be_printed += len(s)
+      elif isinstance(s, FormattedString):
+        result.to_be_printed += s.to_be_printed
+        result.raw += s.to_be_printed
+        result.len_to_be_printed += s.len_to_be_printed
+
+    return result
+
+
 class InfoFormatter(ABC):
 
   @abstractmethod
@@ -689,12 +731,18 @@ class InfoFormatter(ABC):
     return "default"
 
   @staticmethod
-  def alignright(what, nb, fillchar=" "):
-    return f"{(fillchar * (nb - len(what)))}{what}"
+  @beartype
+  def alignright(printable_what: FormattedString, nb: int, fillchar=" "):
+    return FormattedString.build_from_colorized_string(
+        f"{(fillchar * (nb - printable_what.len_to_be_printed))}{printable_what.to_be_printed}",
+        f"{(fillchar * (nb - printable_what.len_to_be_printed))}{printable_what.raw}")
 
   @staticmethod
-  def alignleft(what, nb, fillchar=" "):
-    return f"{what}{(fillchar * (nb - len(what)))}"
+  @beartype
+  def alignleft(printable_what: FormattedString, nb: int, fillchar=" "):
+    return FormattedString.build_from_colorized_string(
+        f"{printable_what.to_be_printed}{(fillchar * (nb - printable_what.len_to_be_printed))}",
+        f"{printable_what.raw}{(fillchar * (nb - printable_what.len_to_be_printed))}")
 
 
 class MsFolderFormatter(InfoFormatter):
@@ -708,17 +756,27 @@ class MsFolderFormatter(InfoFormatter):
     status_subfiles = "<subfiles ok>" if what.files_retrieval_has_started() else ""
 
     if len(what.name) < self.max_name_size:
-      fname = f"{Fore.BLUE}{Style.BRIGHT}{what.name}{Style.RESET_ALL}/"
+      fname = FormattedString.build_from_colorized_string(
+          f"{Fore.BLUE}{Style.BRIGHT}{what.name}{Style.RESET_ALL}/",
+          f"{what.name}/")
     else:
-      fname = f"{Fore.BLUE}{Style.BRIGHT}{what.name[:self.max_name_size - 5]}{Style.RESET_ALL}.../"
-    result = (
-        f"{what.size:>20,}  {InfoFormatter.alignleft(fname,self.max_name_size)}"
+      fname = FormattedString.build_from_colorized_string(
+          f"{Fore.BLUE}{Style.BRIGHT}{what.name[:self.max_name_size - 5]}{Style.RESET_ALL}.../",
+          f"{what.name[:self.max_name_size - 5]}.../")
+
+    result = FormattedString.concat(
+        f"{what.size:>12}  ",
+        InfoFormatter.alignleft(
+            fname,
+            self.max_name_size),
         f"  {what.child_count:>6}  {status_subfolders}{status_subfiles}")
     return result
 
   @beartype
   def format_lite(self, what: MsFolderInfo):
-    return f"{Fore.BLUE}{Style.BRIGHT}{what.name}{Style.RESET_ALL}/"
+    return FormattedString.build_from_colorized_string(
+        f"{Fore.BLUE}{Style.BRIGHT}{what.name}{Style.RESET_ALL}/",
+        f"{what.name}/")
 
 
 class MsFileFormatter(InfoFormatter):
@@ -730,12 +788,13 @@ class MsFileFormatter(InfoFormatter):
     fname = f"{what.name}" if len(
         what.name) < self.max_name_size else f"{what.name[:self.max_name_size - 5]}..."
     fmdt = what.last_modified_datetime.strftime("%Y-%m-%d %H:%M:%S")
-    result = f"{what.size:>20,}  {InfoFormatter.alignleft(fname,self.max_name_size)}  {fmdt}  "
+    result = FormattedString.concat(f"{what.size:>12}  ", InfoFormatter.alignleft(
+        FormattedString.build_from_string(fname), self.max_name_size), fmdt, "  ")
     return result
 
   @beartype
   def format_lite(self, what: MsFileInfo):
-    return what.name
+    return FormattedString.build_from_string(what.name)
 
 
 class LsFormatter():
@@ -764,11 +823,17 @@ class LsFormatter():
 
     i = start_number
     for c in fi.children_folder:
-      print(f"{i:>3} - {self.folder_formatter.format(c)}")
+      print(
+          FormattedString.concat(
+              f"{i:>3} - ",
+              self.folder_formatter.format(c)).to_be_printed)
       i = i + 1
     if not only_folders:
       for c in fi.children_file:
-        print(f"{i:>3} - {self.file_formatter.format(c)}")
+        print(
+            FormattedString.concat(
+                f"{i:>3} - ",
+                self.file_formatter.format(c)).to_be_printed)
         i = i + 1
 
     if recursive and depth > 0:
@@ -814,6 +879,7 @@ class ColumnsPrinter():
     self.sbc = sbc  # space between column
 
   def is_printable(self, max_len_line, elts, nb_columns):
+    # elts = list of FormattedString
     nb_elts = len(elts)
     nb_lines = 1 + math.floor((len(elts) - 1) / nb_columns)
 
@@ -822,15 +888,15 @@ class ColumnsPrinter():
     for i in range(0, nb_lines):
       elt = elts[i]
       c = 0
-      if len(elt) > column_sizes[c]:
-        column_sizes[c] = len(elt)
+      if elt.len_to_be_printed > column_sizes[c]:
+        column_sizes[c] = elt.len_to_be_printed
       w = column_sizes[0]
 
       for j in range(i + nb_lines, nb_elts, nb_lines):
         elt = elts[j]
         c += 1
-        if len(elt) > column_sizes[c]:
-          column_sizes[c] = len(elt)
+        if elt.len_to_be_printed > column_sizes[c]:
+          column_sizes[c] = elt.len_to_be_printed
         w += self.sbc + column_sizes[c]
 
       for d in range(c + 1, nb_columns):
@@ -842,26 +908,28 @@ class ColumnsPrinter():
     return True
 
   def column_sizes(self, elts, nb_columns):
+    # elts = list of FormattedString
     nb_elts = len(elts)
     nb_lines = 1 + math.floor((len(elts) - 1) / nb_columns)
     column_sizes = [0] * nb_columns
     for i in range(0, nb_lines):
       elt = elts[i]
-      w = len(elt)
+      w = elt.len_to_be_printed
       c = 0
-      if len(elt) > column_sizes[c]:
-        column_sizes[c] = len(elt)
+      if w > column_sizes[c]:
+        column_sizes[c] = w
 
       for j in range(i + nb_lines, nb_elts, nb_lines):
         c += 1
         elt = elts[j]
-        if len(elt) > column_sizes[c]:
-          column_sizes[c] = len(elt)
+        if elt.len_to_be_printed > column_sizes[c]:
+          column_sizes[c] = elt.len_to_be_printed
         w += self.sbc + column_sizes[c]
 
     return column_sizes
 
   def nb_columns(self, elts):
+    # elts = list of FormattedString
     low = 1
     high = 10
     while high - low > 1:
@@ -877,7 +945,7 @@ class ColumnsPrinter():
       return low
 
   def print_with_columns(self, what):
-    # what : string list to be printed
+    # what : list of FormattedString to be printed
     nbc = self.nb_columns(what)
     cs = self.column_sizes(what, nbc)
     nb_lines = 1 + math.floor((len(what) - 1) / nbc)
@@ -886,5 +954,10 @@ class ColumnsPrinter():
       new_line = InfoFormatter.alignleft(what[i], cs[k])
       for j in range(i + nb_lines, len(what), nb_lines):
         k += 1
-        new_line += " " * self.sbc + InfoFormatter.alignleft(what[j], cs[k])
-      print(new_line)
+        new_line = FormattedString.concat(
+            new_line,
+            " " * self.sbc,
+            InfoFormatter.alignleft(
+                what[j],
+                cs[k]))
+      print(new_line.to_be_printed)
