@@ -60,6 +60,6 @@ class ObjectInfoFactory:
                                          mgc_response_json['size'],
                                          qxh,
                                          mgc_response_json['file']['hashes']['sha1Hash'],
-                                         str_from_ms_datetime(mgc_response_json['fileSystemInfo']['createdDateTime']),
-                                         str_from_ms_datetime(mgc_response_json['fileSystemInfo']['lastModifiedDateTime'])
+                                         str_from_ms_datetime(mgc_response_json['createdDateTime']),
+                                         str_from_ms_datetime(mgc_response_json['lastModifiedDateTime'])
                                          )

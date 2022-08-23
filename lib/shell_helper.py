@@ -444,8 +444,7 @@ class Completer:
 
       parts_cmd = self.__get_cmd_parts_with_quotation_guess(line)
 
-      if len(parts_cmd) > 0 and (
-              parts_cmd[0] == "cd" or parts_cmd[0] == "get"):
+      if len(parts_cmd) > 0 and (parts_cmd[0] in ("cd", "get", "stat")):
 
         #
         # Complete with remote folder or file
@@ -492,7 +491,7 @@ class Completer:
           search_folder.retrieve_children_info(only_folders=(cmd == "cd"))
           # a=MsFolderInfo("k","l",mgc)
           # a.retrieve_children_info(only_folders=False)
-          if cmd == "get":
+          if cmd in ("get", "stat"):
             all_children = search_folder.children_folder + search_folder.children_file
           else:
             all_children = search_folder.children_folder
@@ -594,9 +593,26 @@ class OneDriveShell:
         if len(parts_cmd) == 2:
           self.change_to_path(parts_cmd[1])
 
+      elif cmd == "stat":
+        if len(parts_cmd) == 2:
+          obj_name = parts_cmd[1]
+          if self.current_fi.is_child_file(obj_name):
+            print(self.current_fi.get_child_file(obj_name).str_full_details())
+          elif self.current_fi.is_child_folder(obj_name):
+            print(self.current_fi.get_child_folder(obj_name).str_full_details())
+          else:
+            print(
+                f"{obj_name} is not a child of current folder({self.current_fi.path})")
+
       elif cmd == "get":
         if len(parts_cmd) == 2:
-          self.mgc.download_file_content(parts_cmd[1], os.getcwd())
+          file_name = parts_cmd[1]
+          if self.current_fi.is_child_file(file_name):
+            self.mgc.download_file_content(
+                self.current_fi.get_child_file(file_name).path, os.getcwd())
+          else:
+            print(
+                f"{file_name} is not a file of current folder({self.current_fi.path})")
 
       elif cmd == "!pwd":
         print(os.getcwd())
