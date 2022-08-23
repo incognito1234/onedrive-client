@@ -57,7 +57,8 @@ class MsFolderInfo(MsObject):
           id: str = "0",
           child_count: int = None,
           size: int = None,
-          parent=None):
+          parent=None,
+          lmdt=None):
     """
         Init folder info
         mgc   = MsGraphClient
@@ -78,6 +79,8 @@ class MsFolderInfo(MsObject):
 
     self.__children_files_retrieval_status = None    # None,"partial" or "all"
     self.__children_folders_retrieval_status = None  # None, "partial" or "all"
+
+    self.last_modified_datetime = lmdt
 
   def get_full_path(self):
     return self.__full_path
@@ -754,6 +757,7 @@ class MsFolderFormatter(InfoFormatter):
   def format(self, what: MsFolderInfo):
     status_subfolders = "<subfolders ok>" if what.folders_retrieval_has_started() else ""
     status_subfiles = "<subfiles ok>" if what.files_retrieval_has_started() else ""
+    fmdt = what.last_modified_datetime.strftime("%b %d %H:%M")
 
     if len(what.name) < self.max_name_size:
       fname = FormattedString.build_from_colorized_string(
@@ -765,11 +769,11 @@ class MsFolderFormatter(InfoFormatter):
           f"{what.name[:self.max_name_size - 5]}.../")
 
     result = FormattedString.concat(
-        f"{what.size:>12}  ",
+        f"{what.size:>12}  {fmdt}  ",
         InfoFormatter.alignleft(
             fname,
             self.max_name_size),
-        f"  {what.child_count:>6}  {status_subfolders}{status_subfiles}")
+        f"{what.child_count:>6}  {status_subfolders}{status_subfiles}")
     return result
 
   @beartype
@@ -787,9 +791,13 @@ class MsFileFormatter(InfoFormatter):
   def format(self, what: MsFileInfo):
     fname = f"{what.name}" if len(
         what.name) < self.max_name_size else f"{what.name[:self.max_name_size - 5]}..."
-    fmdt = what.last_modified_datetime.strftime("%Y-%m-%d %H:%M:%S")
-    result = FormattedString.concat(f"{what.size:>12}  ", InfoFormatter.alignleft(
-        FormattedString.build_from_string(fname), self.max_name_size), fmdt, "  ")
+    fmdt = what.last_modified_datetime.strftime("%b %d %H:%M")
+    result = FormattedString.concat(
+        f"{what.size:>12}  {fmdt}  ",
+        InfoFormatter.alignleft(
+            FormattedString.build_from_string(fname),
+            self.max_name_size),
+        "  ")
     return result
 
   @beartype

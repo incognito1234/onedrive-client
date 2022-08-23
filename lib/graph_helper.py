@@ -62,8 +62,9 @@ class MsGraphClient:
 
     # folder_path must start with '/'
     if only_folder:
-      param_urls = {'$filter': 'folder ne any',
-                    '$select': 'name,folder,id,size,parentReference'}
+      param_urls = {
+          '$filter': 'folder ne any',
+          '$select': 'name,folder,id,size,parentReference,lastModifiedDateTime'}
     else:
       param_urls = ()
 

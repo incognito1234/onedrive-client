@@ -43,7 +43,8 @@ class ObjectInfoFactory:
         id=mgc_response_json['id'],
         child_count=mgc_response_json['folder']['childCount'],
         size=mgc_response_json['size'],
-        parent=parent
+        parent=parent,
+        lmdt=str_from_ms_datetime(mgc_response_json['lastModifiedDateTime'])
     )
 
   @staticmethod
