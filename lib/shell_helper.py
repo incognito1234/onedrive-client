@@ -4,6 +4,7 @@
 import math
 import os
 from platform import platform
+from colorama import Fore, Style, init as cinit
 import sys
 # readline introduce history management in prompt
 import readline
@@ -511,6 +512,7 @@ class OneDriveShell:
 
   @beartype
   def __init__(self, mgc: MsGraphClient):
+    cinit()  # initialize colorama
     self.mgc = mgc
     self.current_fi = MsFolderInfo("", "", self.mgc)
     self.root_folder = self.current_fi
@@ -702,8 +704,10 @@ class MsFolderFormatter(InfoFormatter):
     status_subfolders = "<subfolders ok>" if what.folders_retrieval_has_started() else ""
     status_subfiles = "<subfiles ok>" if what.files_retrieval_has_started() else ""
 
-    fname = f"{what.name}/" if len(
-        what.name) < self.max_name_size else f"{what.name[:self.max_name_size - 5]}.../"
+    if len(what.name) < self.max_name_size:
+      fname = f"{Fore.BLUE}{Style.BRIGHT}{what.name}{Style.RESET_ALL}/"
+    else:
+      fname = f"{Fore.BLUE}{Style.BRIGHT}{what.name[:self.max_name_size - 5]}{Style.RESET_ALL}.../"
     result = (
         f"{what.size:>20,}  {InfoFormatter.alignleft(fname,self.max_name_size)}"
         f"  {what.child_count:>6}  {status_subfolders}{status_subfiles}")
@@ -711,7 +715,7 @@ class MsFolderFormatter(InfoFormatter):
 
   @beartype
   def format_lite(self, what: MsFolderInfo):
-    return f"{what.name}/"
+    return f"{Fore.BLUE}{Style.BRIGHT}{what.name}{Style.RESET_ALL}/"
 
 
 class MsFileFormatter(InfoFormatter):
