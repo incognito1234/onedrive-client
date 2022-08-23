@@ -210,7 +210,7 @@ class MsFolderInfo(MsObject):
           self,
           folder_name,
           force_children_retrieval=False):
-    if force_children_retrieval and not self.folders_retrieval_has_started:
+    if force_children_retrieval and not self.folders_retrieval_has_started():
       self.retrieve_children_info(only_folders=True)
     return folder_name in self.__dict_children_folder
 
@@ -225,7 +225,7 @@ class MsFolderInfo(MsObject):
           self,
           folder_name,
           force_children_retrieval=False):
-    if force_children_retrieval and not self.folders_retrieval_has_started:
+    if force_children_retrieval and not self.folders_retrieval_has_started():
       self.retrieve_children_info(only_folders=True)
     return self.__dict_children_folder[folder_name] if folder_name in self.__dict_children_folder else None
 
@@ -236,7 +236,8 @@ class MsFolderInfo(MsObject):
     search_folder = self
     for f in path_parts:
       if search_folder.is_direct_child_folder(f, force_children_retrieval):
-        search_folder = search_folder.get_direct_child_folder(f)
+        search_folder = search_folder.get_direct_child_folder(
+            f, force_children_retrieval)
       else:
         return None
     return search_folder
@@ -672,7 +673,8 @@ class OneDriveShell:
     else:
       full_path = os.path.normpath(folder_path[1:])
 
-    if self.root_folder.is_child_folder(full_path):
+    if self.root_folder.is_child_folder(
+            full_path, force_children_retrieval=True):
       self.current_fi = self.root_folder.get_child_folder(full_path)
 
 
