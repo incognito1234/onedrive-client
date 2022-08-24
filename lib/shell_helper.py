@@ -126,7 +126,8 @@ class Completer:
           if len(parts_cmd) > 1:
             folder_names_str = parts_cmd[1]
             folder_names = StrPathUtil.split_path(folder_names_str)
-            if folder_names_str[-1] == os.sep:
+
+            if folder_names_str[-1] == os.sep:  # Last part is a folder
               start_text = ""
             else:
               start_text = folder_names[-1]
@@ -135,19 +136,27 @@ class Completer:
               folder_names_str = os.sep.join(folder_names)
               if len(folder_names) > 0:  # was 1 before removing
                 folder_names_str = folder_names_str + os.sep
+
+            if len(
+                    folder_names) > 1 and folder_names[0] == '':  # This is a absolute path
+              search_folder = self.shell.root_folder
+              folder_names = folder_names[1:]  # Remove first item which is ""
+            else:
+              search_folder = self.shell.current_fi
+
           else:
             folder_names_str = ""
             folder_names = []
             start_text = ""
+            search_folder = self.shell.current_fi
 
           # Extract start of text to be escaped if necessary
           self.new_start_line = cmd + " " + \
               StrPathUtil.escape_str(folder_names_str)
 
           # Get folder info of last folders in given path
-          search_folder = self.shell.current_fi
           for f in folder_names:
-            if search_folder.is_child_folder(f):
+            if search_folder.is_direct_child_folder(f):
               search_folder = search_folder.get_direct_child_folder(f, True)
             else:
               break
@@ -180,6 +189,7 @@ class Completer:
           return None
 
       return None
+
     except Exception as e:
       print(f"[complete]Exception = {e}")
 
@@ -277,9 +287,9 @@ class OneDriveShell:
       elif cmd == "get":
         if len(parts_cmd) == 2:
           file_name = parts_cmd[1]
-          if self.current_fi.is_direct_child_file(file_name):
+          if self.current_fi.is_child_file(file_name):
             self.mgc.download_file_content(
-                self.current_fi.get_direct_child_file(file_name).path, os.getcwd())
+                self.current_fi.get_child_file(file_name).path, os.getcwd())
           else:
             print(
                 f"{file_name} is not a file of current folder({self.current_fi.path})")
@@ -353,17 +363,26 @@ class OneDriveShell:
       else:
         print("unknown command")
 
+  def full_path_from_root_folder(self, str_path):
+    """
+       Build full path of an object from string given in command line.
+       If str_path starts with a separator, path from root_path is computed.
+       Else path from current_folder is considered
+    """
+    if str_path[0] != os.sep:
+      result = os.path.normpath(
+          self.current_fi.get_full_path() +
+          os.sep +
+          str_path)[
+          1:]
+    else:
+      result = os.path.normpath(str_path[1:])
+    return result
+
   def change_to_path(self, folder_path):
 
     # Compute relative path from root_folder
-    if folder_path[0] != os.sep:
-      full_path = os.path.normpath(
-          self.current_fi.get_full_path() +
-          os.sep +
-          folder_path)[
-          1:]
-    else:
-      full_path = os.path.normpath(folder_path[1:])
+    full_path = self.full_path_from_root_folder(folder_path)
 
     if self.root_folder.is_child_folder(
             full_path, force_children_retrieval=True):
