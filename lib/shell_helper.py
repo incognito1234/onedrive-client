@@ -209,6 +209,49 @@ class MsFolderInfo(MsObject):
     self.children_file.append(file_info)
     self.__dict_children_file[file_info.name] = file_info
 
+  def get_direct_child_folder(
+          self,
+          folder_name,
+          force_children_retrieval=False):
+    if force_children_retrieval and not self.folders_retrieval_has_started():
+      self.retrieve_children_info(only_folders=True)
+    return self.__dict_children_folder[folder_name] if folder_name in self.__dict_children_folder else None
+
+  def get_child_folder(self, folder_path, force_children_retrieval=False):
+    path_parts = folder_path.split(os.sep)
+    if path_parts[-1] == "":      # folder_path ends with a "/"
+      path_parts = path_parts[:-1]
+    search_folder = self
+    for f in path_parts:
+      if search_folder.is_direct_child_folder(f, force_children_retrieval):
+        search_folder = search_folder.get_direct_child_folder(
+            f, force_children_retrieval)
+      else:
+        return None
+    return search_folder
+
+  def get_direct_child_file(self, file_name, force_children_retrieval=False):
+    if force_children_retrieval and not self.folders_retrieval_has_started():
+      self.retrieve_children_info(only_folders=False)
+    return self.__dict_children_file[file_name] if file_name in self.__dict_children_file else None
+
+  def get_child_file(self, file_path, force_children_retrieval=False):
+    path_parts = file_path.split(os.sep)
+    search_folder = self
+    i = 0
+    while i < (len(path_parts) - 1):
+      f = path_parts[i]
+      if search_folder.is_direct_child_folder(f, force_children_retrieval):
+        search_folder = search_folder.get_direct_child_folder(
+            f, force_children_retrieval)
+      else:
+        return None
+      i += 1
+    if search_folder.is_direct_child_file(
+            path_parts[-1], force_children_retrieval):
+      return search_folder.get_direct_child_file(
+          path_parts[-1], force_children_retrieval)
+
   def is_direct_child_folder(
           self,
           folder_name,
@@ -221,32 +264,13 @@ class MsFolderInfo(MsObject):
     return self.get_child_folder(
         folder_path, force_children_retrieval) is not None
 
-  def is_child_file(self, file_name):
+  def is_direct_child_file(self, file_name, force_children_retrieval=False):
+    if force_children_retrieval and not self.folders_retrieval_has_started():
+      self.retrieve_children_info(only_folders=False)
     return file_name in self.__dict_children_file
 
-  def get_direct_child_folder(
-          self,
-          folder_name,
-          force_children_retrieval=False):
-    if force_children_retrieval and not self.folders_retrieval_has_started():
-      self.retrieve_children_info(only_folders=True)
-    return self.__dict_children_folder[folder_name] if folder_name in self.__dict_children_folder else None
-
-  def get_child_folder(self, folder_path, force_children_retrieval=False):
-    path_parts = folder_path.split("/")
-    if path_parts[-1] == "":
-      path_parts = path_parts[:-1]
-    search_folder = self
-    for f in path_parts:
-      if search_folder.is_direct_child_folder(f, force_children_retrieval):
-        search_folder = search_folder.get_direct_child_folder(
-            f, force_children_retrieval)
-      else:
-        return None
-    return search_folder
-
-  def get_child_file(self, file_name):
-    return self.__dict_children_file[file_name] if file_name in self.__dict_children_file else None
+  def is_child_file(self, file_path, force_children_retrieval=False):
+    return self.get_child_file(file_path, force_children_retrieval) is not None
 
   def files_retrieval_has_started(self):
     return self.__children_files_retrieval_status == "all" or self.__children_files_retrieval_status == "partial"
@@ -596,7 +620,8 @@ class OneDriveShell:
       elif cmd == "stat":
         if len(parts_cmd) == 2:
           obj_name = parts_cmd[1]
-          if self.current_fi.is_child_file(obj_name):
+          if self.current_fi.is_child_file(
+                  obj_name, force_children_retrieval=True):
             print(self.current_fi.get_child_file(obj_name).str_full_details())
           elif self.current_fi.is_child_folder(obj_name):
             print(self.current_fi.get_child_folder(obj_name).str_full_details())
@@ -607,9 +632,9 @@ class OneDriveShell:
       elif cmd == "get":
         if len(parts_cmd) == 2:
           file_name = parts_cmd[1]
-          if self.current_fi.is_child_file(file_name):
+          if self.current_fi.is_direct_child_file(file_name):
             self.mgc.download_file_content(
-                self.current_fi.get_child_file(file_name).path, os.getcwd())
+                self.current_fi.get_direct_child_file(file_name).path, os.getcwd())
           else:
             print(
                 f"{file_name} is not a file of current folder({self.current_fi.path})")

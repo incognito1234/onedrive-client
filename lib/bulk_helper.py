@@ -141,7 +141,7 @@ def mupload_folder(
 
     elif entry.is_dir():
 
-      if ms_folder.is_child_file(entry.name):
+      if ms_folder.is_direct_child_file(entry.name):
         mgc.logger.log_warning(
             '[mupload_folder]{0} is a local folder but is a remote file. Skip it'.format(
                 entry.path))
@@ -175,9 +175,9 @@ def file_needs_upload(
         ms_remote_folder: MsFolderInfo):
   str_local_file_name = "{0}/{1}".format(src_folder_path, str_file_name)
 
-  if ms_remote_folder.is_child_file(str_file_name):
+  if ms_remote_folder.is_direct_child_file(str_file_name):
     hash_qxh = qxh.quickxorhash(str_local_file_name)
-    ms_fileinfo = ms_remote_folder.get_child_file(str_file_name)
+    ms_fileinfo = ms_remote_folder.get_direct_child_file(str_file_name)
 
     if ms_fileinfo.qxh is not None:
       ms_fileinfo.mgc.logger.log_debug(
