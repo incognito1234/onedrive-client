@@ -322,6 +322,10 @@ class MsGraphClient:
     return r
 
   def create_folder(self, dst_path, new_folder):
+    """
+      If successfull, return the name of the new folder.
+      Else return none
+    """
     if (dst_path == '/') | (dst_path == ''):
       dst_url = '{0}/me/drive/root:/children'.format(MsGraphClient.graph_url)
     else:
@@ -340,9 +344,10 @@ class MsGraphClient:
         data=data_json)
 
     if r.status_code == 201:
-      result = True
+      r_json = r.json()
+      result = r_json["name"]
     else:
-      result = False
+      result = None
       self.logger.log_error(
           "[create_folder]Error during creation of folder {0}/{1} - Error {2}".format(
               dst_path, new_folder, r.status_code))

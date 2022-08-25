@@ -18,7 +18,8 @@ from lib.action_helper import (
     action_raw_cmd,
     action_download, action_mdownload,
     action_get_info,
-    action_browse, action_qxh, action_remove
+    action_browse, action_qxh, action_remove,
+    action_mkdir
 )
 from lib.file_config_helper import create_and_get_config_folder, force_permission_file_read_write_owner
 import os
@@ -86,6 +87,9 @@ if __name__ == '__main__':
 
   if args.command == "stat":
     action_get_info(mgc, args.dstremotepath)
+
+  if args.command == "mkdir":
+    action_mkdir(mgc, args.remotefolder)
 
   if args.command == "qxh":
     action_qxh(args.srcfile)

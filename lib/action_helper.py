@@ -7,6 +7,7 @@ from lib.bulk_helper import bulk_folder_download, bulk_folder_upload
 from lib.oi_factory import ObjectInfoFactory
 from beartype import beartype
 from lib.graph_helper import MsGraphClient
+import os
 
 
 def action_get_user(mgc):
@@ -82,7 +83,7 @@ def action_mdownload(
 @beartype
 def action_remove(mgc: MsGraphClient, file_path: str):
   r = mgc.delete_file(file_path)
-  exit(r)
+  return r
 
 
 @beartype
@@ -95,6 +96,18 @@ def action_get_info(mgc: MsGraphClient, remote_path: str):
 def action_browse(mgc: MsGraphClient):
   od_shell = OneDriveShell(mgc)
   od_shell.launch()
+
+
+@beartype
+def action_mkdir(mgc: MsGraphClient, remote_folder: str):
+  part_path = os.path.split(remote_folder)
+  r = mgc.create_folder(part_path[0], part_path[1])
+  if r is not None:
+    mgc.logger.log_info(f"action_mkdir - folder {r} has just been create")
+  else:
+    mgc.logger.log_error(
+        f"action_mkdir - error during creation folder {remote_folder}")
+  return r
 
 
 @beartype

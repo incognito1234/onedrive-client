@@ -132,6 +132,13 @@ def parse_odc_args():
   parser_remove.add_argument('filepath', type=str, help='remote file')
   parser_remove.set_defaults(command="rm")
 
+  parser_mkdir = sub_parsers.add_parser('mkdir', help='make a directory')
+  parser_mkdir.add_argument(
+      'remotefolder',
+      type=str,
+      help='folder to be created')
+  parser_mkdir.set_defaults(command="mkdir")
+
   parser_quickxorhash = sub_parsers.add_parser(
       'qxh', help='compute quickxorhash of file')
   parser_quickxorhash.add_argument('srcfile', type=str, help='source file')
