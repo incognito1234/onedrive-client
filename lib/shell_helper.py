@@ -513,11 +513,15 @@ class MsFileFormatter(InfoFormatter):
 class LsFormatter():
 
   @beartype
-  def __init__(self, file_formatter: MsFileFormatter,
-               folder_formatter: MsFolderFormatter):
+  def __init__(
+          self,
+          file_formatter: MsFileFormatter,
+          folder_formatter: MsFolderFormatter,
+          include_number: bool = True):
     self.file_formatter = file_formatter
     self.folder_formatter = folder_formatter
     self.column_printer = ColumnsPrinter(2)
+    self.include_number = include_number
 
   @beartype
   def print_folder_children(
@@ -536,16 +540,18 @@ class LsFormatter():
 
     i = start_number
     for c in fi.children_folder:
+      prefix_number = f"{i:>3} - " if self.include_number else ""
       print(
           FormattedString.concat(
-              f"{i:>3} - ",
+              prefix_number,
               self.folder_formatter.format(c)).to_be_printed)
       i = i + 1
     if not only_folders:
       for c in fi.children_file:
+        prefix_number = f"{i:>3} - " if self.include_number else ""
         print(
             FormattedString.concat(
-                f"{i:>3} - ",
+                prefix_number,
                 self.file_formatter.format(c)).to_be_printed)
         i = i + 1
 

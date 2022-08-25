@@ -2,7 +2,7 @@
 #  This file is part of OneDrive Client Program which is released under MIT License
 #  See file LICENSE for full license details
 from lib.check_helper import quickxorhash
-from lib.shell_helper import OneDriveShell
+from lib.shell_helper import OneDriveShell, LsFormatter, MsFolderFormatter, MsFileFormatter
 from lib.bulk_helper import bulk_folder_download, bulk_folder_upload
 from lib.oi_factory import ObjectInfoFactory
 from beartype import beartype
@@ -23,7 +23,8 @@ def action_get_user(mgc):
 def action_get_children(mgc: MsGraphClient, folder: str):
   folder_info = ObjectInfoFactory.get_object_info(mgc, folder)[1]
   folder_info.retrieve_children_info(recursive=False, depth=0)
-  folder_info.print_children()
+  ls_formatter = LsFormatter(MsFileFormatter(60), MsFolderFormatter(60), False)
+  ls_formatter.print_folder_children(folder_info, only_folders=False)
 
 
 @beartype
