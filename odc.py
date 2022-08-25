@@ -60,13 +60,13 @@ if __name__ == '__main__':
   if args.command == "get_user":
     action_get_user(mgc)
 
-  if args.command == "get_children":
+  if args.command == "ls":
     action_get_children(mgc, args.folder)
 
-  if args.command == "upload":
+  if args.command == "put":
     action_upload(mgc, args.dstpath, args.srcfile)
 
-  if args.command == "mupload":
+  if args.command == "mput":
     action_mupload(mgc, args.srclocalpath, args.dstremotefolder)
 
   if args.command == "raw_cmd":
@@ -75,16 +75,16 @@ if __name__ == '__main__':
   if args.command == "browse":
     action_browse(mgc)
 
-  if args.command == "download":
+  if args.command == "get":
     action_download(mgc, args.remotefile, args.dstlocalpath)
 
-  if args.command == "mdownload":
+  if args.command == "mget":
     action_mdownload(mgc, args.remotefolder, args.dstlocalpath, args.depth)
 
-  if args.command == "remove":
+  if args.command == "rm":
     action_remove(mgc, args.filepath)
 
-  if args.command == "get_info":
+  if args.command == "stat":
     action_get_info(mgc, args.dstremotepath)
 
   if args.command == "qxh":

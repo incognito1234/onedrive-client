@@ -1,6 +1,7 @@
 #  Copyright 2019-2022 Jareth Lomson <jareth.lomson@gmail.com>
 #  This file is part of OneDrive Client Program which is released under MIT License
 #  See file LICENSE for full license details
+
 """Onedrive Client Program
 
   Usage:
@@ -49,16 +50,20 @@ def parse_odc_args():
       type=int,
       help='log level (default = WARN)',
       default=2)
-  sub_parsers = parser.add_subparsers(dest='command')
+  parser.set_defaults(command="")
+  sub_parsers = parser.add_subparsers(dest='cmd')
 
   parser_init = sub_parsers.add_parser('init', help='init token')
+  parser_init.set_defaults(command="init")
 
-  parser_upload = sub_parsers.add_parser('upload', help='upload a file')
+  parser_upload = sub_parsers.add_parser(
+      'put', aliases=['upload'], help='upload a file')
   parser_upload.add_argument('srcfile', type=str, help='source file')
   parser_upload.add_argument('dstpath', type=str, help='destination path')
+  parser_upload.set_defaults(command="put")
 
   parser_mupload = sub_parsers.add_parser(
-      'mupload', help='upload a complete folder')
+      'mput', aliases=['mupload'], help='upload a complete folder')
   parser_mupload.add_argument(
       'srclocalpath',
       type=str,
@@ -67,27 +72,34 @@ def parse_odc_args():
       'dstremotefolder',
       type=str,
       help='destination remote folder')
+  parser_mupload.set_defaults(command="mput")
 
   parser_raw_cmd = sub_parsers.add_parser('raw_cmd', help='raw command')
+  parser_raw_cmd.set_defaults(command="raw_cmd")
 
   parser_get_user = sub_parsers.add_parser('get_user', help='get user')
+  parser_get_user.set_defaults(command="get_user")
 
   parser_get_children = sub_parsers.add_parser(
-      'get_children', help='get children')
+      'ls', aliases=['get_children'], help='get children')
   parser_get_children.add_argument('folder', type=str, help='folder')
+  parser_get_children.set_defaults(command="ls")
 
   parser_browse = sub_parsers.add_parser(
       'browse', help='browse from root folder')
+  parser_browse.set_defaults(command="browse")
 
-  parser_download = sub_parsers.add_parser('download', help='download a file')
+  parser_download = sub_parsers.add_parser(
+      'get', aliases=['download'], help='download a file')
   parser_download.add_argument('remotefile', type=str, help='remote file')
   parser_download.add_argument(
       'dstlocalpath',
       type=str,
       help='destination path where file will be downloaded')
+  parser_download.set_defaults(command="get")
 
   parser_mdownload = sub_parsers.add_parser(
-      'mdownload', help='download a complete folder')
+      'mget', aliases=['mdownload'], help='download a complete folder')
   parser_mdownload.add_argument(
       'remotefolder',
       type=str,
@@ -102,23 +114,28 @@ def parse_odc_args():
       type=int,
       help='maximum depth',
       default=999)
+  parser_mdownload.set_defaults(command="mget")
 
   parser_get_info = sub_parsers.add_parser(
-      'get_info', help='get info from object')
+      'stat', aliases=['get_info'], help='get info from object')
   parser_get_info.add_argument(
       'dstremotepath',
       type=str,
       help='destination object')
+  parser_get_info.set_defaults(command="stat")
 
   parser_remove = sub_parsers.add_parser(
-      'remove',
+      'rm',
+      aliases=['remove'],
       help='remove a file',
       description='Return 1 = OK. 0 = KO. 2 = Unknown')
   parser_remove.add_argument('filepath', type=str, help='remote file')
+  parser_remove.set_defaults(command="rm")
 
   parser_quickxorhash = sub_parsers.add_parser(
       'qxh', help='compute quickxorhash of file')
   parser_quickxorhash.add_argument('srcfile', type=str, help='source file')
+  parser_quickxorhash.set_defaults(command="qxh")
 
   result = parser.parse_args()
 
