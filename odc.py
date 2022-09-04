@@ -31,12 +31,21 @@ if __name__ == '__main__':
   args = parse_odc_args()
 
   # Configure Logger
-  FORMAT_LOG = "%(asctime)-15s [%(levelname)s] %(message)s"
+  FORMAT_LOG = "%(asctime)-15s %(name)s [%(levelname)s] %(message)s"
+  logging.basicConfig(format=FORMAT_LOG)
+  lg_root = logging.getLogger()
+  if not args.logstdout:
+    if (len(lg_root.handlers) > 0):
+      # Should be a StreamHandler that writes on std.err
+      sh = lg_root.handlers[0]
+      lg_root.removeHandler(sh)
+    else:
+      print("ERROR: No default logging hander has been detected")
 
   if args.logfile is not None:
-    logging.basicConfig(format=FORMAT_LOG, filename=args.logfile)
-  else:
-    logging.basicConfig(format=FORMAT_LOG)
+    fh = logging.FileHandler(filename=args.logfile)
+    fh.setFormatter(logging.Formatter(FORMAT_LOG))
+    lg_root.addHandler(fh)
 
   lg = logging.getLogger('odc')
   # logging level are given here:
@@ -47,8 +56,9 @@ if __name__ == '__main__':
   fh = logging.FileHandler("complete.txt")
   lg_completer.propagate = False
   lg_completer.addHandler(fh)
-  lg_completer.setLevel(logging.DEBUG)
+  # lg_completer.setLevel(logging.DEBUG)
 
+  # Get authentication token
   config_dirname = create_and_get_config_folder()
   if config_dirname is None:
     exit(0)
@@ -69,6 +79,7 @@ if __name__ == '__main__':
     print("please connect first with {} init".format(sys.argv[0]))
     quit()
 
+  # Manage command
   mgc = MsGraphClient(tr.get_session_from_token())
   if args.command == "get_user":
     action_get_user(mgc)
