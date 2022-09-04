@@ -1,6 +1,7 @@
 #  Copyright 2019-2022 Jareth Lomson <jareth.lomson@gmail.com>
 #  This file is part of OneDrive Client Program which is released under MIT License
 #  See file LICENSE for full license details
+
 import yaml
 from requests_oauthlib import OAuth2Session
 from lib.log import Logger
@@ -21,6 +22,7 @@ os.environ['OAUTHLIB_IGNORE_SCOPE_CHANGE'] = '1'
 current_dirname = os.path.dirname(os.path.realpath(__file__))
 stream = open("{0}/../oauth_settings.yml".format(current_dirname), 'r')
 settings = yaml.load(stream, yaml.SafeLoader)
+stream.close()
 authorize_url = '{0}{1}'.format(
     settings['authority'],
     settings['authorize_endpoint'])
