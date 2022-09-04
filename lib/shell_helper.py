@@ -1,6 +1,8 @@
 #  Copyright 2019-2022 Jareth Lomson <jareth.lomson@gmail.com>
 #  This file is part of OneDrive Client Program which is released under MIT License
 #  See file LICENSE for full license details
+import logging
+
 import math
 import os
 from platform import platform
@@ -15,8 +17,9 @@ from re import fullmatch
 from beartype import beartype
 
 from lib.graph_helper import MsGraphClient
-from lib.log import Logger
 from lib.msobject_info import MsFileInfo, MsFolderInfo
+
+lg = logging.getLogger('odc.browser')
 
 
 class StrPathUtil:
@@ -60,17 +63,16 @@ class Completer:
   # To avoid misunderstanding, only the folder name is displayed in the
   # match list
 
-  def __init__(self, odshell, lg=None):
+  def __init__(self, odshell):
     self.shell = odshell
     self.values = []
     self.start_line = ""
     self.new_start_line = ""
     self.columns_printer = ColumnsPrinter(2)
-    self.lg = lg
+    self.lg_complete = logging.getLogger("odc.browser.completer")
 
   def __log_debug(self, what):
-    if self.lg is not None:
-      self.lg.log_debug(f"[complete]{what}")
+    self.lg_complete.debug(f"[complete]{what}")
 
   def display_matches(self, what, matches, longest_match_length):
     try:
@@ -223,8 +225,7 @@ class OneDriveShell:
 
   def launch(self):
 
-    cp = Completer(self, lg=Logger("./log_complete.txt", 4))
-    #cp = Completer(self)
+    cp = Completer(self)
 
     readline.parse_and_bind('tab: complete')
     readline.set_completer(cp.complete)

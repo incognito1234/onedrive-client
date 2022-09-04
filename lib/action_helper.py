@@ -1,6 +1,8 @@
 #  Copyright 2019-2022 Jareth Lomson <jareth.lomson@gmail.com>
 #  This file is part of OneDrive Client Program which is released under MIT License
 #  See file LICENSE for full license details
+import logging
+
 from lib.check_helper import quickxorhash
 from lib.shell_helper import OneDriveShell, LsFormatter, MsFolderFormatter, MsFileFormatter
 from lib.bulk_helper import bulk_folder_download, bulk_folder_upload
@@ -8,6 +10,8 @@ from lib.oi_factory import ObjectInfoFactory
 from beartype import beartype
 from lib.graph_helper import MsGraphClient
 import os
+
+lg = logging.getLogger('odc.action')
 
 
 def action_get_user(mgc):
@@ -42,7 +46,7 @@ def action_mupload(
         mgc: MsGraphClient,
         src_local_path: str,
         dst_remote_folder: str):
-  mgc.logger.log_debug("action_mupload - folder = '{0}' to '{1}'".format(
+  lg.debug("action_mupload - folder = '{0}' to '{1}'".format(
       src_local_path, dst_remote_folder
   ))
   bulk_folder_upload(mgc, src_local_path, dst_remote_folder)
@@ -74,7 +78,7 @@ def action_mdownload(
         folder_path: str,
         dest_path: str,
         max_depth: int):
-  mgc.logger.log_debug("action_mdownload - folder = '{0}' - depth = '{1}'".format(
+  lg.debug("action_mdownload - folder = '{0}' - depth = '{1}'".format(
       folder_path, max_depth
   ))
   bulk_folder_download(mgc, folder_path, dest_path, max_depth)
@@ -103,10 +107,9 @@ def action_mkdir(mgc: MsGraphClient, remote_folder: str):
   part_path = os.path.split(remote_folder)
   r = mgc.create_folder(part_path[0], part_path[1])
   if r is not None:
-    mgc.logger.log_info(f"action_mkdir - folder {r} has just been create")
+    lg.info(f"action_mkdir - folder {r} has just been create")
   else:
-    mgc.logger.log_error(
-        f"action_mkdir - error during creation folder {remote_folder}")
+    lg.error(f"action_mkdir - error during creation folder {remote_folder}")
   return r
 
 

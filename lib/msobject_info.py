@@ -1,12 +1,15 @@
 #  Copyright 2019-2022 Jareth Lomson <jareth.lomson@gmail.com>
 #  This file is part of OneDrive Client Program which is released under MIT License
 #  See file LICENSE for full license details
+import logging
 import math
 import os
 from abc import ABC, abstractmethod
 from beartype import beartype
 from lib.graph_helper import MsGraphClient
 from lib.oi_factory import ObjectInfoFactory
+
+lg = logging.getLogger('odc.msobject')
 
 
 class MsObject(ABC):
@@ -89,7 +92,7 @@ class MsFolderInfo(MsObject):
           only_folders=False,
           recursive=False,
           depth=999):
-    self.__mgc.logger.log_debug(
+    lg.debug(
         f"[retrieve_children_info] {self.get_full_path()} - only_folders = {only_folders} - depth = {depth}")
 
     if depth > 0 and (
@@ -116,11 +119,10 @@ class MsFolderInfo(MsObject):
           fi = ObjectInfoFactory.MsFileInfoFromMgcResponse(self.__mgc, c)
           self.add_file_info(fi)
         else:
-          self.__mgc.logger.log_info(
-              "retrieve_children_info : UNKNOWN RESPONSE")
+          lg.info("retrieve_children_info : UNKNOWN RESPONSE")
 
       self.__add_default_folder_info()
-      self.__mgc.logger.log_debug(
+      lg.debug(
           f"[retrieve_children_info] {self.get_full_path()} - setting retrieval status")
 
       if not only_folders:
@@ -133,7 +135,7 @@ class MsFolderInfo(MsObject):
           only_folders=False,
           recursive=False,
           depth=999):
-    self.__mgc.logger.log_debug(
+    lg.debug(
         f"[retrieve_children_info_next] {self.get_full_path()} - only_folders = {only_folders} - depth = {depth}")
 
     if depth > 0 and (
@@ -160,10 +162,9 @@ class MsFolderInfo(MsObject):
           fi = ObjectInfoFactory.MsFileInfoFromMgcResponse(self.__mgc, c)
           self.add_file_info(fi)
         else:
-          self.__mgc.logger.log_info(
-              "retrieve_children_info : UNKNOWN RESPONSE")
+          lg.info("retrieve_children_info : UNKNOWN RESPONSE")
 
-      self.__mgc.logger.log_debug(
+      lg.debug(
           f"[retrieve_children_info_from_link] {self.next_link_children} - setting retrieval status")
 
       if not only_folders:

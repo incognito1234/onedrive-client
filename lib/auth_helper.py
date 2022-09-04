@@ -2,12 +2,14 @@
 #  This file is part of OneDrive Client Program which is released under MIT License
 #  See file LICENSE for full license details
 
+import logging
 import yaml
 from requests_oauthlib import OAuth2Session
-from lib.log import Logger
 import os
 import time
 import json
+
+lg = logging.getLogger('odc.auth')
 
 # This is necessary for testing with non-HTTPS localhost
 # Remove this if deploying to production
@@ -67,12 +69,6 @@ class TokenRecorder:
   def __init__(self, filename):
     self.filename = filename
     self.token = None
-    self.logger = Logger(None, 4)
-
-  def __init__(self, filename, logger):
-    self.filename = filename
-    self.token = None
-    self.logger = logger
 
   def store_token(self, token):
     """
@@ -84,7 +80,7 @@ class TokenRecorder:
     return 1
 
   def __refresh_token(self, token):
-    self.logger.log_info("Refresh token")
+    lg.info("Refresh token")
     self.store_token(token)
 
   def token_exists(self):
@@ -94,7 +90,7 @@ class TokenRecorder:
         self.token = data
         result = 1
     except Exception as err:
-      self.logger.log_error(
+      lg.error(
           "Error during loading of file {0} - {1}".format(self.filename, err))
       result = 0
 
@@ -133,7 +129,7 @@ class TokenRecorder:
       return None
 
   def get_session_from_token(self):
-    self.logger.log_debug("Get session from token starting")
+    lg.debug("Get session from token starting")
     refresh_params = {
         'client_id': settings['app_id'],
         'client_secret': settings['app_secret'],

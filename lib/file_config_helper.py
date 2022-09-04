@@ -1,13 +1,15 @@
 #  Copyright 2019-2022 Jareth Lomson <jareth.lomson@gmail.com>
 #  This file is part of OneDrive Client Program which is released under MIT License
 #  See file LICENSE for full license details
+import logging
 import os
 import sys
 import stat
-from lib.log import Logger
+
+lg = logging.getLogger('odc.config')
 
 
-def create_and_get_config_folder(lg: Logger = None):
+def create_and_get_config_folder():
   if 'HOME' in os.environ:
     home_folder = os.environ['HOME']
   elif 'APPDATA' in os.environ:
@@ -22,22 +24,15 @@ def create_and_get_config_folder(lg: Logger = None):
       os.chmod(param_folder, mode=stat.S_IXUSR | stat.S_IWUSR | stat.S_IRUSR)
       result = param_folder
     except BaseException:
-      if lg is not None:
-        lg.log_error("Error will creation of config folder")
-      else:
-        print("Error will creation of config folder", file=sys.stderr)
-
+      lg.error("Error will creation of config folder")
       result = None
   else:
     result = param_folder
   return result
 
 
-def force_permission_file_read_write_owner(filename, lg: Logger = None):
+def force_permission_file_read_write_owner(filename):
   try:
     os.chmod(filename, stat.S_IWUSR | stat.S_IRUSR)
   except BaseException:
-    if lg is not None:
-      lg.log_error("Error will setting permission of token")
-    else:
-      print("Error will setting permission of token", file=sys.stderr)
+    lg.error("Error will setting permission of token")

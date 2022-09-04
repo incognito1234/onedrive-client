@@ -5,11 +5,12 @@
 """
   Onedrive Client Program
 """
+import logging
+
 from lib.auth_helper import get_sign_in_url, get_token_from_code, TokenRecorder
 from lib.graph_helper import MsGraphClient
 
 import pprint
-from lib.log import Logger
 from lib.args_helper import parse_odc_args
 from lib.action_helper import (
     action_get_user,
@@ -27,23 +28,34 @@ import sys
 
 if __name__ == '__main__':
 
+  args = parse_odc_args()
+
+  # Configure Logger
+  FORMAT_LOG = "%(asctime)-15s [%(levelname)s] %(message)s"
+
+  if args.logfile is not None:
+    logging.basicConfig(format=FORMAT_LOG, filename=args.logfile)
+  else:
+    logging.basicConfig(format=FORMAT_LOG)
+
+  lg = logging.getLogger('odc')
+  # logging level are given here:
+  # https://docs.python.org/3.8/library/logging.html#levels
+  lg.setLevel(50 - (args.loglevel * 10))
+
+  lg_completer = logging.getLogger("odc.browser.completer")
+  fh = logging.FileHandler("complete.txt")
+  lg_completer.propagate = False
+  lg_completer.addHandler(fh)
+  lg_completer.setLevel(logging.DEBUG)
+
   config_dirname = create_and_get_config_folder()
   if config_dirname is None:
     exit(0)
 
-  args = parse_odc_args()
-
-  if args.logfile is not None:
-    lg = Logger(args.logfile,
-                args.loglevel,
-                with_stdout=args.logstdout
-                )
-  else:
-    lg = Logger(None, args.loglevel, with_stdout=args.logstdout)
-
   token_file_name = "{0}/.token.json".format(config_dirname)
   force_permission_file_read_write_owner(token_file_name)
-  tr = TokenRecorder(token_file_name, lg)
+  tr = TokenRecorder(token_file_name)
 
   if args.command == 'init':
     sign_in_url, state = get_sign_in_url()
@@ -57,7 +69,7 @@ if __name__ == '__main__':
     print("please connect first with {} init".format(sys.argv[0]))
     quit()
 
-  mgc = MsGraphClient(tr.get_session_from_token(), lg)
+  mgc = MsGraphClient(tr.get_session_from_token())
   if args.command == "get_user":
     action_get_user(mgc)
 

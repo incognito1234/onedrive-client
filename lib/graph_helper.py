@@ -1,25 +1,23 @@
 #  Copyright 2019-2022 Jareth Lomson <jareth.lomson@gmail.com>
 #  This file is part of OneDrive Client Program which is released under MIT License
 #  See file LICENSE for full license details
-from logging import raiseExceptions
+import logging
+
 from requests_oauthlib import OAuth2Session
-from lib.log import Logger
 import json
 import os
 import pprint
 import time
+
+lg = logging.getLogger("odc.msgraph")
 
 
 class MsGraphClient:
 
   graph_url = 'https://graph.microsoft.com/v1.0'
 
-  def __init__(self, mgc, logger):
+  def __init__(self, mgc):
     self.mgc = mgc
-    self.logger = logger
-
-  def set_logger(self, logger):
-    self.logger = logger
 
   def get_user(self):
     # Send GET to /me
@@ -98,13 +96,13 @@ class MsGraphClient:
     with open(local_filepath, 'wb') as f:
       for chunk in r.iter_content(chunk_size=CHUNK_SIZE):
         if chunk:  # filter out keep-alive new chunks
-          self.logger.log_info(
+          lg.info(
               "[download_file_content] Downloading {0} from {1}".format(
                   dst_path, start))
           f.write(chunk)
           f.flush()
           start = start + CHUNK_SIZE
-    self.logger.log_info(
+    lg.info(
         "[download_file_content] Download of file '{0}' to '{1}' - OK".format(dst_path, local_dst))
 
     return 1
@@ -128,11 +126,9 @@ class MsGraphClient:
 
   def put_file_content(self, dst_folder, src_file):
 
-    self.logger.log_info(
-        "Start put_file_content('{0}','{1}')".format(
-            dst_folder, src_file))
+    lg.info("Start put_file_content('{0}','{1}')".format(dst_folder, src_file))
     total_size = os.path.getsize(src_file)
-    self.logger.log_debug("File size = {0}".format(total_size))
+    lg.debug("File size = {0}".format(total_size))
     file_name = src_file.split("/").pop()
     # For file size < 4Mb
     if total_size < (1048576 * 4):
@@ -145,7 +141,7 @@ class MsGraphClient:
           # 'Content-Type' : 'text/plain'
           'Content-Type': 'application/octet-stream'
       }
-      self.logger.log_debug("url put file = {}".format(url))
+      lg.debug("url put file = {}".format(url))
       r = self.mgc.put(
           url,
           data=open(src_file, 'rb'),
@@ -182,7 +178,7 @@ class MsGraphClient:
 
       # Upload parts of file
       total_size = os.path.getsize(src_file)
-      self.logger.log_debug("total_size = {0:,}".format(total_size))
+      lg.debug("total_size = {0:,}".format(total_size))
 
       CHUNK_SIZE = 1048576 * 20  # 20 MB
       current_start = 0
@@ -213,7 +209,7 @@ class MsGraphClient:
             stop_reason = "exceed_number_of_loop"
             break
 
-          self.logger.log_debug(
+          lg.debug(
               "{0} start/end/size/total/nbretry - {1:>15,}{2:>15,}{3:>15,}{4:>15,}{5:>6}".format(
                   i,
                   current_start,
@@ -241,19 +237,20 @@ class MsGraphClient:
             # Unavailable - 504: Gateway Timeout
 
             r = self.mgc.get(uurl)
-            self.logger.log_debug(
+            lg.debug(
                 "Error with retry. Status of upload URL: {0}".format(
                     pprint.pformat(
                         r.json())))
 
             if not retry_status.max_retry_reach():
               retry_status.increase_retry()
-              self.logger.log_warning(
+              lg.warning(
                   "Error during uploading. Retry #{0}. Uploaded range: {1}->{2}. error code : {3}. Retrying upload".format(
-                      retry_status.get_nb_retry(), current_start, current_end, status_code_put))
-              self.logger.log_info(
-                  "Wait {0} seconds".format(
-                      retry_status.delay_wait()))
+                      retry_status.get_nb_retry(),
+                      current_start,
+                      current_end,
+                      status_code_put))
+              lg.info("Wait {0} seconds".format(retry_status.delay_wait()))
               ner = r.json()['nextExpectedRanges'][0]
               current_start = int(ner[:ner.find('-')])
               if total_size >= current_start + CHUNK_SIZE:
@@ -267,7 +264,7 @@ class MsGraphClient:
               raise Exception("Maximum retry reached after an error")
 
           elif status_code_put == 404:  # Not found. Upload session no longer exists
-            self.logger.log_error(
+            lg.error(
                 "Upload session no longer exists (error code 404). Stop upload")
             raise Exception(
                 "Upload session no longer exists. Please relaunch upload. Current range: {0}->{1}.".format(
@@ -276,12 +273,12 @@ class MsGraphClient:
           elif status_code_put not in (202, 201, 200):  # Accepted/Created/OK
             msg_error = "Error during uploading. uploaded range: {0}->{1}. status_code : {2}. Stop upload".format(
                 current_start, current_end, r.status_code)
-            self.logger.log_error(msg_error)
+            lg.error(msg_error)
 
             raise Exception(msg_error)
             # r is a object with type 'request.response' which is not serializable as json - an error is raised
             # 'TypeError: Object of type 'Response' is not JSON serializable'
-            # self.logger.log_error("Error during uploading. uploaded range: {0}->{1}. status_code : {2}. response : {3}".format(
+            # lg.error("Error during uploading. uploaded range: {0}->{1}. status_code : {2}. response : {3}".format(
             #  current_start, current_end, r.status_code, pprint.pformat(json.dumps(r))
             # ))
 
@@ -298,21 +295,16 @@ class MsGraphClient:
 
       rjson = r.json()
       if "id" not in rjson:
-        self.logger.log_error("Error during uploading")
+        lg.error("Error during uploading")
       else:
-        self.logger.log_info(
-            "Correctly uploaded - id = {0}".format(rjson["id"]))
+        lg.info("Correctly uploaded - id = {0}".format(rjson["id"]))
         r = self.mgc.get(uurl)
-        self.logger.log_debug(
-            "Status of upload URL: {0}".format(
-                pprint.pformat(
-                    r.json())))
+        lg.debug("Status of upload URL: {0}".format(pprint.pformat(r.json())))
 
       # Close URL
       self.cancel_upload(uurl)
 
-      self.logger.log_info(
-          "Session is finish - Stop_reason = {0}".format(stop_reason))
+      lg.info("Session is finish - Stop_reason = {0}".format(stop_reason))
       r = r1
       return r
 
@@ -348,7 +340,7 @@ class MsGraphClient:
       result = r_json["name"]
     else:
       result = None
-      self.logger.log_error(
+      lg.error(
           "[create_folder]Error during creation of folder {0}/{1} - Error {2}".format(
               dst_path, new_folder, r.status_code))
 
