@@ -5,8 +5,8 @@ import logging
 
 from lib.check_helper import quickxorhash
 from lib.shell_helper import OneDriveShell, LsFormatter, MsFolderFormatter, MsFileFormatter
+from lib.msobject_info import ObjectInfoFactory
 from lib.bulk_helper import bulk_folder_download, bulk_folder_upload
-from lib.oi_factory import ObjectInfoFactory
 from beartype import beartype
 from lib.graph_helper import MsGraphClient
 import os

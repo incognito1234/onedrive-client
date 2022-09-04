@@ -8,7 +8,7 @@ from lib.shell_helper import MsFolderInfo, MsFileInfo
 from lib.check_helper import quickxorhash
 from beartype import beartype
 from lib.graph_helper import MsGraphClient
-from lib.oi_factory import ObjectInfoFactory
+from lib.msobject_info import ObjectInfoFactory
 
 lg = logging.getLogger('odc.bulk')
 qxh = quickxorhash()
