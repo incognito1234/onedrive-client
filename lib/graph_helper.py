@@ -142,10 +142,11 @@ class MsGraphClient:
           'Content-Type': 'application/octet-stream'
       }
       lg.debug("url put file = {}".format(url))
-      r = self.mgc.put(
-          url,
-          data=open(src_file, 'rb'),
-          headers=headers)
+      with open(src_file, 'rb') as f:
+        r = self.mgc.put(
+            url,
+            data=f,
+            headers=headers)
 
       return r
 
