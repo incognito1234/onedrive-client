@@ -41,6 +41,11 @@ def parse_odc_args():
       help='log file',
       default=None)
   parser.add_argument(
+      '--forcenostderr',
+      help='disable error logging on stderr if logging is not configured',
+      action="store_true",
+      default=False)
+  parser.add_argument(
       '--logstdout',
       help='print log to stdout',
       action="store_true",

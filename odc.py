@@ -42,6 +42,11 @@ if __name__ == '__main__':
     else:
       print("ERROR: No default logging hander has been detected")
 
+  if args.forcenostderr:
+    # By default, message error are logged on console if no handlers is configured.
+    # The following line disables this behavior.
+    logging.lastResort = logging.NullHandler()
+
   if args.logfile is not None:
     fh = logging.FileHandler(filename=args.logfile)
     fh.setFormatter(logging.Formatter(FORMAT_LOG))
