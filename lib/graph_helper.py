@@ -16,7 +16,7 @@ class MsGraphClient:
 
   graph_url = 'https://graph.microsoft.com/v1.0'
 
-  def __init__(self, mgc):
+  def __init__(self, mgc: OAuth2Session):
     self.mgc = mgc
 
   def get_user(self):
@@ -346,6 +346,42 @@ class MsGraphClient:
               dst_path, new_folder, r.status_code))
 
     return result
+
+  def get_id(self, object_path: str):
+    r = self.mgc.get('{0}/me/drive/root:/{1}'.format(
+        MsGraphClient.graph_url, object_path
+    )).json()
+    if 'error' in r:
+      return None
+    else:
+      return r["id"]
+
+  def move_object(self, src_path: str, dst_path: str):
+    lg.info(f"[move]Entering move_object ({src_path},{dst_path})")
+
+    part_src_path = os.path.split(src_path)
+    src_url = '{0}/me/drive/root:/{1}'.format(
+        MsGraphClient.graph_url, src_path)
+    id_parent = self.get_id(dst_path)
+    if id_parent is None:
+      lg.error("[move]parent not found")
+      return False
+
+    headers = {'Content-Type': 'application/json'}
+    data = {
+        "parentReference": {
+            "id": id_parent
+        },
+        "name": part_src_path[1]
+    }
+    data_json = json.dumps(data)
+    r = self.mgc.patch(src_url, headers=headers, data=data_json)
+
+    if r.status_code == 200:
+      return True
+    else:
+      lg.error(f"[move]Error during move: {r.reason}")
+      return False
 
   class RetryStatus:
 

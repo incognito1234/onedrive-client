@@ -85,6 +85,11 @@ def action_mdownload(
 
 
 @beartype
+def action_move(mgc: MsGraphClient, src_path: str, dst_path: str):
+  return mgc.move_object(src_path, dst_path)
+
+
+@beartype
 def action_remove(mgc: MsGraphClient, file_path: str):
   r = mgc.delete_file(file_path)
   return r

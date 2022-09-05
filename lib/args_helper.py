@@ -124,6 +124,12 @@ def parse_odc_args():
       help='destination object')
   parser_get_info.set_defaults(command="stat")
 
+  parser_move = sub_parsers.add_parser(
+      'mv', aliases=['move'], help='move a file or a folder')
+  parser_move.add_argument('srcpath', type=str, help='source path')
+  parser_move.add_argument('dstpath', type=str, help='destination path')
+  parser_move.set_defaults(command="mv")
+
   parser_remove = sub_parsers.add_parser(
       'rm',
       aliases=['remove'],

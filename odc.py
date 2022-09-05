@@ -19,7 +19,7 @@ from lib.action_helper import (
     action_raw_cmd,
     action_download, action_mdownload,
     action_get_info,
-    action_browse, action_qxh, action_remove,
+    action_browse, action_qxh, action_move, action_remove,
     action_mkdir
 )
 from lib.file_config_helper import create_and_get_config_folder, force_permission_file_read_write_owner
@@ -104,6 +104,14 @@ if __name__ == '__main__':
 
   if args.command == "mget":
     action_mdownload(mgc, args.remotefolder, args.dstlocalpath, args.depth)
+
+  if args.command == "mv":
+    lg_msgraph = logging.getLogger("odc.msgraph")
+    sh = logging.StreamHandler()
+    lg_msgraph.propagate = False
+    lg_msgraph.addHandler(sh)
+    lg_msgraph.setLevel(logging.DEBUG)
+    action_move(mgc, args.srcpath, args.dstpath)
 
   if args.command == "rm":
     action_remove(mgc, args.filepath)
