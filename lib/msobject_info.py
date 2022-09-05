@@ -285,9 +285,11 @@ class MsFolderInfo(MsObject):
 
   def str_full_details(self):
     result = ("Folder {0}\n"
-              "name = {1}").format(
+              "name = {1}\n"
+              "id = {2}").format(
         self.get_full_path()[1:],
-        self.name
+        self.name,
+        self.__id
     )
 
     return result
