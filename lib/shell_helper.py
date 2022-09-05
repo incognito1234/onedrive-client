@@ -158,7 +158,7 @@ class Completer:
 
           # Get folder info of last folders in given path
           for f in folder_names:
-            if search_folder.is_direct_child_folder(f):
+            if search_folder.is_direct_child_folder(f, True):
               search_folder = search_folder.get_direct_child_folder(f, True)
             else:
               break
