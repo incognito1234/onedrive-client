@@ -106,11 +106,6 @@ if __name__ == '__main__':
     action_mdownload(mgc, args.remotefolder, args.dstlocalpath, args.depth)
 
   if args.command == "mv":
-    lg_msgraph = logging.getLogger("odc.msgraph")
-    sh = logging.StreamHandler()
-    lg_msgraph.propagate = False
-    lg_msgraph.addHandler(sh)
-    lg_msgraph.setLevel(logging.DEBUG)
     action_move(mgc, args.srcpath, args.dstpath)
 
   if args.command == "rm":
