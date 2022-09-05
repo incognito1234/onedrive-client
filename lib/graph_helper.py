@@ -348,8 +348,9 @@ class MsGraphClient:
     return result
 
   def get_id(self, object_path: str):
-    r = self.mgc.get('{0}/me/drive/root:/{1}'.format(
-        MsGraphClient.graph_url, object_path
+    prefixed_path = "" if object_path == "/" or object_path == "" else f":/{object_path}"
+    r = self.mgc.get('{0}/me/drive/root{1}'.format(
+        MsGraphClient.graph_url, prefixed_path
     )).json()
     if 'error' in r:
       return None
