@@ -51,7 +51,8 @@ class MsFolderInfo(MsObject):
           child_count: int = None,
           size: int = None,
           parent=None,
-          lmdt=None):
+          lmdt=None,
+          cdt=None):
     """
         Init folder info
         mgc   = MsGraphClient
@@ -74,6 +75,7 @@ class MsFolderInfo(MsObject):
     self.__children_folders_retrieval_status = None  # None, "partial" or "all"
 
     self.last_modified_datetime = lmdt
+    self.creation_datetime = cdt
 
   def get_full_path(self):
     return self.__full_path
@@ -284,13 +286,16 @@ class MsFolderInfo(MsObject):
     return result
 
   def str_full_details(self):
-    result = ("Folder {0}\n"
-              "name = {1}\n"
-              "id = {2}").format(
-        self.get_full_path()[1:],
-        self.name,
-        self.__id
-    )
+    result = (
+        f"Folder - {self.get_full_path()[1:]}\n"
+        f"  name                            = {self.name}\n"
+        f"  id                              = {self.__id}\n"
+        f"  size                            = {self.size}\n"
+        f"  childcount                      = {self.child_count}\n"
+        f"  lastModifiedDateTime            = {self.last_modified_datetime}\n"
+        f"  creationDateTime                = {self.creation_datetime}\n"
+        f"  childrenFilesRetrievalStatus    = {self.__children_files_retrieval_status}\n"
+        f"  childrenFoldersRetrievalStatus  = {self.__children_folders_retrieval_status}\n")
 
     return result
 
@@ -371,10 +376,14 @@ class ObjectInfoFactory:
 
   @staticmethod
   def get_object_info(mgc, path):
-    # Consider root
-    prefixed_path = "" if path == "/" or path == "" else f":/{path}"
+    """
+      Return a 2-tuple (<error_code>, <object_info>).
+      If error_code is not None, object is None and error_code is set code of response sent by Msgraph.
+      Else, object_info is set with found object or None if nothing is found.
+    """
+    prefixed_path = "" if path == "/" or path == "" else f":/{path}"  # Consider root
     r = mgc.mgc.get('{0}/me/drive/root{1}'.format(
-        MsGraphClient.graph_url, path
+        MsGraphClient.graph_url, prefixed_path
     )).json()
     if 'error' in r:
       return (r['error']['code'], None)
@@ -411,7 +420,8 @@ class ObjectInfoFactory:
         child_count=mgc_response_json['folder']['childCount'],
         size=mgc_response_json['size'],
         parent=parent,
-        lmdt=str_from_ms_datetime(mgc_response_json['lastModifiedDateTime'])
+        lmdt=str_from_ms_datetime(mgc_response_json['lastModifiedDateTime']),
+        cdt=str_from_ms_datetime(mgc_response_json['createdDateTime'])
     )
 
   @staticmethod

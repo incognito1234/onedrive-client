@@ -98,7 +98,10 @@ def action_remove(mgc: MsGraphClient, file_path: str):
 @beartype
 def action_get_info(mgc: MsGraphClient, remote_path: str):
   r = ObjectInfoFactory.get_object_info(mgc, remote_path)
-  print(r[1].str_full_details())
+  if r[0] is not None:
+    print("Object not found")
+  else:
+    print(r[1].str_full_details())
 
 
 @beartype

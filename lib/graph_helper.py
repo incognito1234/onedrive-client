@@ -62,7 +62,7 @@ class MsGraphClient:
     if only_folder:
       param_urls = {
           '$filter': 'folder ne any',
-          '$select': 'name,folder,id,size,parentReference,lastModifiedDateTime'}
+          '$select': 'name,folder,id,size,parentReference,lastModifiedDateTime,createdDateTime'}
     else:
       param_urls = ()
 

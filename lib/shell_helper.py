@@ -349,6 +349,7 @@ class OneDriveShell:
         print("   lls                   : Continue listing folder in case of large folder")
         print("   cd <folder path>      : Change to folder path")
         print("   get <file_path>       : Download <file_path> in current folder")
+        print("   stat <object_path>    : Get info about object")
         print("   ll                    : List Folder with details")
         print("   pwd                   : Print full path of current folder")
         print("   <number>              : Dig into given folder")
