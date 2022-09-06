@@ -73,11 +73,51 @@ class MsObject(ABC):
                f in (self._fget, self._fset, self._fdel))
 
   @staticmethod
-  def get_lastfolderinfo_path(root_fi, input_path, current_fi=None):
+  def get_lastfolderinfo_path(root_fi, input, current_fi=None):
     """
       Return a tuple (<last_folder_info_path>, <remaining_text>)
     """
-    pass
+    my_input = input
+
+    # Manage empty path
+    if my_input == "":
+      if current_fi is None:
+        return (None, None)
+      else:
+        return (current_fi, "")
+
+     # Manage relative path without current_fi
+    if my_input[0] != "/" and current_fi is None:
+      return (None, None)
+
+    # Build full path and normalize it (removing .. and .)
+    if my_input[0] != "/":
+      my_input = f"{current_fi.path}/{my_input}"
+    my_input = os.path.normpath(my_input)
+
+    # Search folder and extract start_text
+    folder_names = StrPathUtil.split_path(my_input)
+    folder_names = folder_names[1:]  # Remove first item which is ""
+    if input[-1] == "/":  # Last part is a folder
+      start_text = ""
+    else:
+      start_text = folder_names[-1]
+      # remove the last folder name which is the start text
+      folder_names = folder_names[:-1]
+
+    search_folder = root_fi
+    found = True
+    for f in folder_names:
+      if search_folder.is_direct_child_folder(f, True):
+        search_folder = search_folder.get_direct_child_folder(f, True)
+      else:
+        found = False
+        break
+
+    if found:
+      return (search_folder, start_text)
+    else:
+      return (None, None)
 
 
 class MsFolderInfo(MsObject):
@@ -451,10 +491,9 @@ class ObjectInfoFactory:
       else:
         parent_path = ""
 
+    full_path = "" if "root" in mgc_response_json else f"{parent_path}/{mgc_response_json['name']}"
     return MsFolderInfo(
-        full_path="{0}/{1}".format(
-            parent_path,
-            mgc_response_json['name']),
+        full_path=full_path,
         name=mgc_response_json['name'],
         mgc=mgc,
         id=mgc_response_json['id'],
