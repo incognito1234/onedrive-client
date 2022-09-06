@@ -90,10 +90,15 @@ class MsObject(ABC):
     if my_input[0] != "/" and current_fi is None:
       return (None, None)
 
+    end_with_dot_or_doubledot = os.path.split(input)[1] in (".", "..")
+    if end_with_dot_or_doubledot:  # Manage path ending with a dot or a double dot
+      my_input = os.path.normpath(f"{my_input}a")
+    else:
+      my_input = os.path.normpath(f"{my_input}")
+
     # Build full path and normalize it (removing .. and .)
     if my_input[0] != "/":
       my_input = f"{current_fi.path}/{my_input}"
-    my_input = os.path.normpath(my_input)
 
     # Search folder and extract start_text
     folder_names = StrPathUtil.split_path(my_input)
@@ -101,9 +106,15 @@ class MsObject(ABC):
     if input[-1] == "/":  # Last part is a folder
       start_text = ""
     else:
-      start_text = folder_names[-1]
-      # remove the last folder name which is the start text
-      folder_names = folder_names[:-1]
+
+      if end_with_dot_or_doubledot:  # Manage path ending with a dot or a double dot
+        start_text = os.path.split(input)[1]
+        # remove the last folder name which is ".a" or "..a"
+        folder_names = folder_names[:-1]
+      else:
+        start_text = folder_names[-1]
+        # remove the last folder name which is the start text
+        folder_names = folder_names[:-1]
 
     search_folder = root_fi
     found = True
