@@ -4,12 +4,46 @@
 import logging
 import math
 import os
+import sys
 from abc import ABC, abstractmethod
 from beartype import beartype
 from lib.graph_helper import MsGraphClient
 from lib.datetime_helper import str_from_ms_datetime
 
 lg = logging.getLogger('odc.msobject')
+
+
+class StrPathUtil:
+  __TO_BE_ESCAPED = ('\\', ' ', '\'') if sys.platform != "win32" else (
+      ' ')  # \\ MUST be the first one
+
+  @staticmethod
+  def escape_str(what):
+    result = what
+    for c in StrPathUtil.__TO_BE_ESCAPED:
+      result = result.replace(c, f"\\{c}")
+
+    return result
+
+  @staticmethod
+  def split_path(full_path):
+    fp = full_path
+    # fp = shlex.split(full_path)[0]  # remove quote and escape sequence
+    fp = os.path.normpath(fp)
+    result = []
+    while (fp != os.sep) and (fp != ""):
+      parts = os.path.split(fp)
+      fp = parts[0]
+      result.append(parts[1])
+    if fp != "":         # Append root path if available
+      result.append("")
+    result.reverse()
+    return result
+
+  @staticmethod
+  def test():
+    ip = input("> ")
+    print(f"result = {StrPathUtil.escape_str(ip)}")
 
 
 class MsObject(ABC):
@@ -37,6 +71,13 @@ class MsObject(ABC):
   def __isabstractmethod__(self):
     return any(getattr(f, '__isabstractmethod__', False) for
                f in (self._fget, self._fset, self._fdel))
+
+  @staticmethod
+  def get_lastfolderinfo_path(root_fi, input_path, current_fi=None):
+    """
+      Return a tuple (<last_folder_info_path>, <remaining_text>)
+    """
+    pass
 
 
 class MsFolderInfo(MsObject):
