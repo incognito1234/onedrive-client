@@ -6,7 +6,9 @@ import logging
 import math
 import os
 from platform import platform
+from unittest import expectedFailure
 from colorama import Fore, Style, init as cinit
+from io import StringIO
 import sys
 # readline introduce history management in prompt
 import readline
@@ -73,6 +75,48 @@ class Completer:
       except ValueError as e:
         return shlex.split(input + '"')
 
+  def __extract_raw_last_args(self, input, parsed_last_arg):
+    """
+      Extract raw last args (with quote and escape chars) from input line.
+      parsed_last_args is the last argument without quote and escape chars.
+
+      Return None if not found
+    """
+    # Build shlex to compute last arg
+    s = shlex.shlex(punctuation_chars=" ")
+    s.whitespace = "\t\r\n"
+    s.quotes = ""
+    s.escape = ""
+    s.commenters = ''
+    s.instream = StringIO(input)
+    part_args = list(s)
+
+    i = len(part_args) - 1
+    raw_last_args = ""
+    while i > 1:
+
+      raw_last_args = part_args[i] + raw_last_args  # append last args to left
+      try:
+        part_std_shlex = shlex.split(raw_last_args)
+      except ValueError as e:  # Not closing quote
+        part_std_shlex = []
+
+      if len(part_std_shlex) > 0:
+        last_arg_std_shlex = part_std_shlex[0]
+      else:
+        last_arg_std_shlex = ""
+
+      if parsed_last_arg == last_arg_std_shlex:  # found !
+        if part_args[i - 1][-1] != " ":
+          raw_last_args = raw_last_args + part_args[i - 1]  # probably a quote
+        return raw_last_args
+
+      i = i - 1
+
+    self.__log_debug(
+        f'extract_raw_last_args("{input}","{parsed_last_arg}") not found')
+    return None
+
   @beartype
   def complete(self, text: str, state: int):
 
@@ -82,7 +126,7 @@ class Completer:
 
       parts_cmd = self.__get_cmd_parts_with_quotation_guess(line)
 
-      if len(parts_cmd) > 0 and (parts_cmd[0] in ("cd", "get", "stat")):
+      if len(parts_cmd) > 0 and (parts_cmd[0] in ("cd", "get", "stat", "mv")):
 
         #
         # Complete with remote folder or file
@@ -93,7 +137,7 @@ class Completer:
         if state == 0:
           # Get last part of full_path and extract start_text of folder name
           if len(parts_cmd) > 1:
-            folder_names_str = parts_cmd[1]
+            folder_names_str = parts_cmd[-1]
             folder_names = StrPathUtil.split_path(folder_names_str)
 
             if folder_names_str[-1] == os.sep:  # Last part is a folder
@@ -120,7 +164,13 @@ class Completer:
             search_folder = self.shell.current_fi
 
           # Extract start of text to be escaped if necessary
-          self.new_start_line = cmd + " " + \
+          if len(parts_cmd) > 1:
+            raw_last_arg = self.__extract_raw_last_args(line, parts_cmd[-1])
+            start_line = line[:-(len(raw_last_arg))]
+          else:  # len(parts_cmd) == 1
+            start_line = line + " "
+
+          self.new_start_line = start_line + \
               StrPathUtil.escape_str(folder_names_str)
 
           # Get folder info of last folders in given path
