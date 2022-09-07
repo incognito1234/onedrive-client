@@ -88,6 +88,11 @@ def parse_odc_args():
   parser_get_children = sub_parsers.add_parser(
       'ls', aliases=['get_children'], help='get children')
   parser_get_children.add_argument('folder', type=str, help='folder')
+  parser_get_children.add_argument(
+      '-p',
+      action="store_true",
+      default=False,
+      help='enable pagination')
   parser_get_children.set_defaults(command="ls")
 
   parser_browse = sub_parsers.add_parser(

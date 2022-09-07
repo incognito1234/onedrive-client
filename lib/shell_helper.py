@@ -13,6 +13,7 @@ import sys
 # readline introduce history management in prompt
 import readline
 import shlex
+import pydoc
 from abc import ABC, abstractmethod
 from re import fullmatch
 
@@ -533,11 +534,13 @@ class LsFormatter():
           self,
           file_formatter: MsFileFormatter,
           folder_formatter: MsFolderFormatter,
-          include_number: bool = True):
+          include_number: bool = True,
+          with_pagination=False):
     self.file_formatter = file_formatter
     self.folder_formatter = folder_formatter
     self.column_printer = ColumnsPrinter(2)
     self.include_number = include_number
+    self.with_pagination = with_pagination
 
   @beartype
   def print_folder_children(
@@ -547,6 +550,7 @@ class LsFormatter():
           recursive: bool = False,
           only_folders: bool = True,
           depth: int = 999):
+
     if ((not fi.folders_retrieval_has_started() and only_folders)
             or (not fi.files_retrieval_has_started() and not only_folders)):
       fi.retrieve_children_info(
@@ -554,23 +558,30 @@ class LsFormatter():
           recursive=recursive,
           depth=depth)
 
+    str_to_be_printed = ""
     i = start_number
     for c in fi.children_folder:
       prefix_number = f"{i:>3} - " if self.include_number else ""
-      print(
-          FormattedString.concat(
-              prefix_number,
-              self.folder_formatter.format(c)).to_be_printed)
+      str_to_be_printed += (
+          f"{FormattedString.concat(prefix_number, self.folder_formatter.format(c)).to_be_printed}"
+          "\n")
+
       i = i + 1
     if not only_folders:
       for c in fi.children_file:
         prefix_number = f"{i:>3} - " if self.include_number else ""
-        print(
-            FormattedString.concat(
-                prefix_number,
-                self.file_formatter.format(c)).to_be_printed)
+        str_to_be_printed += (
+            f"{FormattedString.concat(prefix_number, self.file_formatter.format(c)).to_be_printed}"
+            "\n")
         i = i + 1
+    str_to_be_printed = str_to_be_printed[:-1]  # remove last carriage return
 
+    if self.with_pagination:
+      pydoc.pipepager(str_to_be_printed, cmd='less -R')
+    else:
+      print(str_to_be_printed)
+
+    # FIXME Does not work (print_children does not exist anymore)
     if recursive and depth > 0:
       for c in fi.children_folder:
         nb_children = c.print_children(

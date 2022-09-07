@@ -25,10 +25,17 @@ def action_get_user(mgc):
 
 
 @beartype
-def action_get_children(mgc: MsGraphClient, folder: str):
+def action_get_children(
+        mgc: MsGraphClient,
+        folder: str,
+        with_pagination: bool):
   folder_info = ObjectInfoFactory.get_object_info(mgc, folder)[1]
   folder_info.retrieve_children_info(recursive=False, depth=0)
-  ls_formatter = LsFormatter(MsFileFormatter(60), MsFolderFormatter(60), False)
+  ls_formatter = LsFormatter(
+      MsFileFormatter(60),
+      MsFolderFormatter(60),
+      False,
+      with_pagination=with_pagination)
   ls_formatter.print_folder_children(folder_info, only_folders=False)
 
 

@@ -90,7 +90,7 @@ if __name__ == '__main__':
     action_get_user(mgc)
 
   if args.command == "ls":
-    action_get_children(mgc, args.folder)
+    action_get_children(mgc, args.folder, args.p)
 
   if args.command == "put":
     action_upload(mgc, args.dstpath, args.srcfile)
