@@ -96,10 +96,7 @@ class Completer:
     while i > 1:
 
       raw_last_args = part_args[i] + raw_last_args  # append last args to left
-      try:
-        part_std_shlex = shlex.split(raw_last_args)
-      except ValueError as e:  # Not closing quote
-        part_std_shlex = []
+      part_std_shlex = self.__get_cmd_parts_with_quotation_guess(raw_last_args)
 
       if len(part_std_shlex) > 0:
         last_arg_std_shlex = part_std_shlex[0]
