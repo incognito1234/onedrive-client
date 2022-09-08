@@ -213,6 +213,8 @@ class Completer:
 
 class OneDriveShell:
 
+  # TODO Enhance help command with arguments for each command
+
   @beartype
   def __init__(self, mgc: MsGraphClient):
     cinit()  # initialize colorama
@@ -271,14 +273,14 @@ class OneDriveShell:
         print(self.current_fi.path)
 
       elif cmd == "ll":
-        if self.current_fi.parent is not None:
-          print("  0 - <parent>")
         self.ls_formatter.print_folder_children(
-            self.current_fi, start_number=1, only_folders=self.only_folders)
+            self.current_fi, start_number=1, only_folders=self.only_folders,
+            with_pagination="-p" in parts_cmd)
 
       elif cmd == "ls":
         self.ls_formatter.print_folder_children_lite(
-            self.current_fi, only_folders=self.only_folders)
+            self.current_fi, only_folders=self.only_folders,
+            with_pagination="-p" in parts_cmd)
 
       elif cmd == "lls":
         self.ls_formatter.print_folder_children_lite_next(
@@ -528,18 +530,19 @@ class MsFileFormatter(InfoFormatter):
 
 class LsFormatter():
 
+  # 'R' to keep colors - 'X' to keep the screen - 'F' no paging if one screen
+  PAGER_COMMAND = 'less -R -X -F'
+
   @beartype
   def __init__(
           self,
           file_formatter: MsFileFormatter,
           folder_formatter: MsFolderFormatter,
-          include_number: bool = True,
-          with_pagination=False):
+          include_number: bool = True):
     self.file_formatter = file_formatter
     self.folder_formatter = folder_formatter
     self.column_printer = ColumnsPrinter(2)
     self.include_number = include_number
-    self.with_pagination = with_pagination
 
   @beartype
   def print_folder_children(
@@ -548,7 +551,8 @@ class LsFormatter():
           start_number: int = 0,
           recursive: bool = False,
           only_folders: bool = True,
-          depth: int = 999):
+          depth: int = 999,
+          with_pagination: bool = False):
 
     if ((not fi.folders_retrieval_has_started() and only_folders)
             or (not fi.files_retrieval_has_started() and not only_folders)):
@@ -575,8 +579,8 @@ class LsFormatter():
         i = i + 1
     str_to_be_printed = str_to_be_printed[:-1]  # remove last carriage return
 
-    if self.with_pagination:
-      pydoc.pipepager(str_to_be_printed, cmd='less -R')
+    if with_pagination:
+      pydoc.pipepager(str_to_be_printed, cmd=LsFormatter.PAGER_COMMAND)
     else:
       print(str_to_be_printed)
 
@@ -595,8 +599,9 @@ class LsFormatter():
   def print_folder_children_lite(
           self,
           fi: MsFolderInfo,
-          only_folders: bool = True):
-    # TODO Add pagination options in print_folder_children_lite
+          only_folders: bool = True,
+          with_pagination: bool = False):
+
     if ((not fi.folders_retrieval_has_started() and only_folders)
             or (not fi.files_retrieval_has_started() and not only_folders)):
       fi.retrieve_children_info(only_folders=only_folders)
@@ -608,7 +613,7 @@ class LsFormatter():
         lambda x: self.file_formatter.format_lite(x),
         fi.children_file)
     all_names = list(folder_names) + list(file_names)
-    self.column_printer.print_with_columns(all_names)
+    self.column_printer.print_with_columns(all_names, with_pagination)
 
   @beartype
   def print_folder_children_lite_next(
@@ -691,11 +696,14 @@ class ColumnsPrinter():
     else:
       return low
 
-  def print_with_columns(self, what):
+  def print_with_columns(self, what, with_pagination=False):
     # what : list of FormattedString to be printed
+    if len(what) == 0:
+      return
     nbc = self.nb_columns(what)
     cs = self.column_sizes(what, nbc)
     nb_lines = 1 + math.floor((len(what) - 1) / nbc)
+    str_to_be_printed = ""
     for i in range(0, nb_lines):
       k = 0
       new_line = InfoFormatter.alignleft(what[i], cs[k])
@@ -707,4 +715,10 @@ class ColumnsPrinter():
             InfoFormatter.alignleft(
                 what[j],
                 cs[k]))
-      print(new_line.to_be_printed.rstrip())
+      str_to_be_printed += new_line.to_be_printed.rstrip() + "\n"
+    # remove trailing carriage return
+    str_to_be_printed = str_to_be_printed[:-1]
+    if with_pagination:
+      pydoc.pipepager(str_to_be_printed, cmd=LsFormatter.PAGER_COMMAND)
+    else:
+      print(str_to_be_printed)
