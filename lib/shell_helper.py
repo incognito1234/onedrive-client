@@ -20,7 +20,7 @@ from re import fullmatch
 from beartype import beartype
 
 from lib.graph_helper import MsGraphClient
-from lib.msobject_info import MsFileInfo, MsFolderInfo, StrPathUtil
+from lib.msobject_info import MsFileInfo, MsFolderInfo, ObjectInfoFactory as Oif, StrPathUtil
 
 lg = logging.getLogger('odc.browser')
 
@@ -219,8 +219,8 @@ class OneDriveShell:
   def __init__(self, mgc: MsGraphClient):
     cinit()  # initialize colorama
     self.mgc = mgc
-    self.current_fi = MsFolderInfo("", "", self.mgc)
-    self.root_folder = self.current_fi
+    self.root_folder = Oif.get_object_info(mgc, "/")[1]
+    self.current_fi = self.root_folder
     self.only_folders = False
     self.ls_formatter = LsFormatter(MsFileFormatter(45), MsFolderFormatter(45))
 
