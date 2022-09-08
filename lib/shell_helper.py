@@ -518,8 +518,7 @@ class MsFileFormatter(InfoFormatter):
         f"{what.size:>12}  {fmdt}  ",
         InfoFormatter.alignleft(
             FormattedString.build_from_string(fname),
-            self.max_name_size),
-        "  ")
+            self.max_name_size))
     return result
 
   @beartype
@@ -529,7 +528,6 @@ class MsFileFormatter(InfoFormatter):
 
 class LsFormatter():
 
-  # TODO Trim line to avoid bad display on small screen
   # TODO Remove dash after line number
 
   @beartype
@@ -566,7 +564,7 @@ class LsFormatter():
     for c in fi.children_folder:
       prefix_number = f"{i:>3} - " if self.include_number else ""
       str_to_be_printed += (
-          f"{FormattedString.concat(prefix_number, self.folder_formatter.format(c)).to_be_printed}"
+          f"{FormattedString.concat(prefix_number, self.folder_formatter.format(c)).to_be_printed.rstrip()}"
           "\n")
 
       i = i + 1
@@ -574,7 +572,7 @@ class LsFormatter():
       for c in fi.children_file:
         prefix_number = f"{i:>3} - " if self.include_number else ""
         str_to_be_printed += (
-            f"{FormattedString.concat(prefix_number, self.file_formatter.format(c)).to_be_printed}"
+            f"{FormattedString.concat(prefix_number, self.file_formatter.format(c)).to_be_printed.rstrip()}"
             "\n")
         i = i + 1
     str_to_be_printed = str_to_be_printed[:-1]  # remove last carriage return
@@ -711,4 +709,4 @@ class ColumnsPrinter():
             InfoFormatter.alignleft(
                 what[j],
                 cs[k]))
-      print(new_line.to_be_printed)
+      print(new_line.to_be_printed.rstrip())
