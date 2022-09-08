@@ -90,6 +90,8 @@ if __name__ == '__main__':
     action_get_user(mgc)
 
   if args.command == "ls":
+    # TODO Add a warning if listed folder has more than 200 elements
+    # TODO Add a option to retrieved all elements
     action_get_children(mgc, args.folder, args.p)
 
   if args.command == "put":
@@ -124,3 +126,5 @@ if __name__ == '__main__':
 
   if args.command == "qxh":
     action_qxh(args.srcfile)
+
+# TODO close mgc

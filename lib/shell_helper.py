@@ -529,6 +529,9 @@ class MsFileFormatter(InfoFormatter):
 
 class LsFormatter():
 
+  # TODO Trim line to avoid bad display on small screen
+  # TODO Remove dash after line number
+
   @beartype
   def __init__(
           self,
@@ -581,7 +584,8 @@ class LsFormatter():
     else:
       print(str_to_be_printed)
 
-    # FIXME Does not work (print_children does not exist anymore)
+    # FIXME Recursive folder printing does not work (print_children does not
+    # exist anymore)
     if recursive and depth > 0:
       for c in fi.children_folder:
         nb_children = c.print_children(
@@ -596,6 +600,7 @@ class LsFormatter():
           self,
           fi: MsFolderInfo,
           only_folders: bool = True):
+    # TODO Add pagination options in print_folder_children_lite
     if ((not fi.folders_retrieval_has_started() and only_folders)
             or (not fi.files_retrieval_has_started() and not only_folders)):
       fi.retrieve_children_info(only_folders=only_folders)
