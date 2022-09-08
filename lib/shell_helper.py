@@ -528,8 +528,6 @@ class MsFileFormatter(InfoFormatter):
 
 class LsFormatter():
 
-  # TODO Remove dash after line number
-
   @beartype
   def __init__(
           self,
@@ -562,7 +560,7 @@ class LsFormatter():
     str_to_be_printed = ""
     i = start_number
     for c in fi.children_folder:
-      prefix_number = f"{i:>3} - " if self.include_number else ""
+      prefix_number = f"{i:>3} " if self.include_number else ""
       str_to_be_printed += (
           f"{FormattedString.concat(prefix_number, self.folder_formatter.format(c)).to_be_printed.rstrip()}"
           "\n")
@@ -570,7 +568,7 @@ class LsFormatter():
       i = i + 1
     if not only_folders:
       for c in fi.children_file:
-        prefix_number = f"{i:>3} - " if self.include_number else ""
+        prefix_number = f"{i:>3} " if self.include_number else ""
         str_to_be_printed += (
             f"{FormattedString.concat(prefix_number, self.file_formatter.format(c)).to_be_printed.rstrip()}"
             "\n")
