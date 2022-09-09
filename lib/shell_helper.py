@@ -215,6 +215,26 @@ class OneDriveShell:
 
   # TODO Enhance help command with arguments for each command
 
+  class Command(ABC):
+
+    @beartype
+    def __init__(self, name: str, description: str, nb_args: int):
+      self.name = name
+      self.description = description
+      self.nb_args = nb_args
+
+    @beartype
+    @abstractmethod
+    def _do_action(self, args):  # Protected method
+      pass
+
+    def do_action(self, args):   # Public method
+      if len(args) != self.nb_args:
+        print(
+            f"{self.nb_args} argument{'s are' if self.nb_args > 1 else ' is'} expected")
+      else:
+        self._do_action(args)
+
   @beartype
   def __init__(self, mgc: MsGraphClient):
     cinit()  # initialize colorama
@@ -223,6 +243,66 @@ class OneDriveShell:
     self.current_fi = self.root_folder
     self.only_folders = False
     self.ls_formatter = LsFormatter(MsFileFormatter(45), MsFolderFormatter(45))
+    self.initiate_commands()
+
+  def initiate_commands(self):
+
+    def init_with_odshell(self2, name, desc, nb_args):
+      super(self2.__class__, self2).__init__(name, desc, nb_args)
+
+    def add_new_cmd(name, desc, nb_args, doa):
+      new_class = type(f"Class_{name}", (OneDriveShell.Command, ), {
+          "__init__": init_with_odshell,
+          "_do_action": doa
+      })
+      self.__dict_cmds[name] = new_class(name, desc, nb_args)
+
+    def action_cd(self2, args):
+      self.change_to_path(args[0])
+
+    def action_ll(self2, args):
+      self.ls_formatter.print_folder_children(
+          self.current_fi, start_number=1, only_folders=self.only_folders,
+          with_pagination="-p" in args)
+
+    def action_ls(self2, args):
+      self.ls_formatter.print_folder_children_lite(
+          self.current_fi, only_folders=self.only_folders,
+          with_pagination="-p" in args)
+
+    def action_lls(self2, args):
+      self.ls_formatter.print_folder_children_lite_next(
+          self.current_fi, only_folders=self.only_folders)
+
+    def action_stat(self2, args):
+      obj_name = args[0]
+      if self.current_fi.is_child_file(
+              obj_name, force_children_retrieval=True):
+        print(self.current_fi.get_child_file(obj_name).str_full_details())
+      elif self.current_fi.is_child_folder(obj_name):
+        print(self.current_fi.get_child_folder(obj_name).str_full_details())
+      else:
+        print(f"{obj_name} is not a child of current folder({self.current_fi.path})")
+
+    def action_get(self2, args):
+      file_name = args[0]
+      if self.current_fi.is_child_file(file_name):
+        self.mgc.download_file_content(
+            self.current_fi.get_child_file(file_name).path, os.getcwd())
+      else:
+        print(f"{file_name} is not a file of current folder({self.current_fi.path})")
+
+    def action_pwd(self2, args):
+      print(self.current_fi.path)
+
+    self.__dict_cmds = {}
+    add_new_cmd("cd", "cd2 desc", 1, action_cd)
+    add_new_cmd("ll", "long list", 0, action_ll)
+    add_new_cmd("ls", "list", 0, action_ls)
+    add_new_cmd("lls", "Continue list", 0, action_lls)
+    add_new_cmd("stat", "Print information about object", 1, action_stat)
+    add_new_cmd("get", "Retrieve an object", 1, action_get)
+    add_new_cmd("pwd", "Print remote working directory", 0, action_pwd)
 
   def change_max_column_size(self, nb):
     self.ls_formatter = LsFormatter(MsFileFormatter(nb), MsFolderFormatter(nb))
@@ -241,7 +321,6 @@ class OneDriveShell:
     return result
 
   def launch(self):
-
     cp = Completer(self)
 
     readline.parse_and_bind('tab: complete')
@@ -269,48 +348,8 @@ class OneDriveShell:
       if cmd == "quit":
         break
 
-      if cmd == "pwd":
-        print(self.current_fi.path)
-
-      elif cmd == "ll":
-        self.ls_formatter.print_folder_children(
-            self.current_fi, start_number=1, only_folders=self.only_folders,
-            with_pagination="-p" in parts_cmd)
-
-      elif cmd == "ls":
-        self.ls_formatter.print_folder_children_lite(
-            self.current_fi, only_folders=self.only_folders,
-            with_pagination="-p" in parts_cmd)
-
-      elif cmd == "lls":
-        self.ls_formatter.print_folder_children_lite_next(
-            self.current_fi, only_folders=self.only_folders)
-
-      elif cmd == "cd":
-        if len(parts_cmd) == 2:
-          self.change_to_path(parts_cmd[1])
-
-      elif cmd == "stat":
-        if len(parts_cmd) == 2:
-          obj_name = parts_cmd[1]
-          if self.current_fi.is_child_file(
-                  obj_name, force_children_retrieval=True):
-            print(self.current_fi.get_child_file(obj_name).str_full_details())
-          elif self.current_fi.is_child_folder(obj_name):
-            print(self.current_fi.get_child_folder(obj_name).str_full_details())
-          else:
-            print(
-                f"{obj_name} is not a child of current folder({self.current_fi.path})")
-
-      elif cmd == "get":
-        if len(parts_cmd) == 2:
-          file_name = parts_cmd[1]
-          if self.current_fi.is_child_file(file_name):
-            self.mgc.download_file_content(
-                self.current_fi.get_child_file(file_name).path, os.getcwd())
-          else:
-            print(
-                f"{file_name} is not a file of current folder({self.current_fi.path})")
+      if cmd in self.__dict_cmds:
+        self.__dict_cmds[cmd].do_action(parts_cmd[1:])
 
       elif cmd == "!pwd":
         print(os.getcwd())
