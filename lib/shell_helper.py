@@ -5,6 +5,7 @@ import logging
 
 import math
 import os
+import argparse
 from platform import platform
 from unittest import expectedFailure
 from colorama import Fore, Style, init as cinit
@@ -213,15 +214,26 @@ class Completer:
 
 class OneDriveShell:
 
+  class ArgumentParserWithoutExit(argparse.ArgumentParser):
+    """
+      ArgumentParser without exiting on error.
+    """
+
+    def exit(self, status=0, message=None):
+      lg.debug(
+          f"Should exit with status '{status}' according to ArgumentParser original method.")
+
+    def error(self, message):
+      self.print_usage(sys.stderr)
+      raise ValueError(message)
+
   # TODO Enhance help command with arguments for each command
 
   class Command(ABC):
 
     @beartype
-    def __init__(self, name: str, description: str, nb_args: int):
+    def __init__(self, name: str):
       self.name = name
-      self.description = description
-      self.nb_args = nb_args
 
     @beartype
     @abstractmethod
@@ -229,11 +241,7 @@ class OneDriveShell:
       pass
 
     def do_action(self, args):   # Public method
-      if len(args) != self.nb_args:
-        print(
-            f"{self.nb_args} argument{'s are' if self.nb_args > 1 else ' is'} expected")
-      else:
-        self._do_action(args)
+      self._do_action(args)
 
   @beartype
   def __init__(self, mgc: MsGraphClient):
@@ -247,18 +255,18 @@ class OneDriveShell:
 
   def initiate_commands(self):
 
-    def init_with_odshell(self2, name, desc, nb_args):
-      super(self2.__class__, self2).__init__(name, desc, nb_args)
+    def init_with_odshell(self2, name):
+      super(self2.__class__, self2).__init__(name)
 
-    def add_new_cmd(name, desc, nb_args, doa):
+    def add_new_cmd(name, doa):
       new_class = type(f"Class_{name}", (OneDriveShell.Command, ), {
           "__init__": init_with_odshell,
           "_do_action": doa
       })
-      self.__dict_cmds[name] = new_class(name, desc, nb_args)
+      self.__dict_cmds[name] = new_class(name)
 
     def action_cd(self2, args):
-      self.change_to_path(args[0])
+      self.change_to_path(args.path)
 
     def action_ll(self2, args):
       self.ls_formatter.print_folder_children(
@@ -275,7 +283,7 @@ class OneDriveShell:
           self.current_fi, only_folders=self.only_folders)
 
     def action_stat(self2, args):
-      obj_name = args[0]
+      obj_name = args.remotepath
       if self.current_fi.is_child_file(
               obj_name, force_children_retrieval=True):
         print(self.current_fi.get_child_file(obj_name).str_full_details())
@@ -285,7 +293,7 @@ class OneDriveShell:
         print(f"{obj_name} is not a child of current folder({self.current_fi.path})")
 
     def action_get(self2, args):
-      file_name = args[0]
+      file_name = args.remotepath
       if self.current_fi.is_child_file(file_name):
         self.mgc.download_file_content(
             self.current_fi.get_child_file(file_name).path, os.getcwd())
@@ -295,14 +303,36 @@ class OneDriveShell:
     def action_pwd(self2, args):
       print(self.current_fi.path)
 
+    myparser = OneDriveShell.ArgumentParserWithoutExit(
+        prog='Onedrive Shell', usage='')
+    sub_parser = myparser.add_subparsers(dest='cmd')
+    myparser.add_argument_group(title='Available commands')
+
+    sp_cd = sub_parser.add_parser('cd', help='Change Directory')
+    sp_cd.add_argument('path', type=str, help='Destination path')
+
+    sp_ll = sub_parser.add_parser('ll', help='List folder with details')
+    sp_ls = sub_parser.add_parser('ls', help='List current folder by column')
+    sp_lls = sub_parser.add_parser(
+        'lls', help='Continue listing folder in case of large folder')
+    sp_lls = sub_parser.add_parser(
+        'pwd', help='Print full path of current folder')
+    sp_get = sub_parser.add_parser(
+        'get', help='Donwload file in current_folder')
+    sp_get = sp_get.add_argument('remotepath', type=str, help='remote file')
+    sp_stat = sub_parser.add_parser('stat', help='Get info about object')
+    sp_stat.add_argument('remotepath', type=str, help='destination object')
+
+    self.__args_parser = myparser
+
     self.__dict_cmds = {}
-    add_new_cmd("cd", "cd2 desc", 1, action_cd)
-    add_new_cmd("ll", "long list", 0, action_ll)
-    add_new_cmd("ls", "list", 0, action_ls)
-    add_new_cmd("lls", "Continue list", 0, action_lls)
-    add_new_cmd("stat", "Print information about object", 1, action_stat)
-    add_new_cmd("get", "Retrieve an object", 1, action_get)
-    add_new_cmd("pwd", "Print remote working directory", 0, action_pwd)
+    add_new_cmd('cd', action_cd)
+    add_new_cmd('ll', action_ll)
+    add_new_cmd('ls', action_ls)
+    add_new_cmd('lls', action_lls)
+    add_new_cmd('stat', action_stat)
+    add_new_cmd('get', action_get)
+    add_new_cmd('pwd', action_pwd)
 
   def change_max_column_size(self, nb):
     self.ls_formatter = LsFormatter(MsFileFormatter(nb), MsFolderFormatter(nb))
@@ -349,7 +379,12 @@ class OneDriveShell:
         break
 
       if cmd in self.__dict_cmds:
-        self.__dict_cmds[cmd].do_action(parts_cmd[1:])
+        args = []
+        try:
+          args = self.__args_parser.parse_args(parts_cmd)
+          self.__dict_cmds[cmd].do_action(args)
+        except Exception as e:
+          print(f"error: {e}")
 
       elif cmd == "!pwd":
         print(os.getcwd())
