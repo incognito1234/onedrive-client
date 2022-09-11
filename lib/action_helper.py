@@ -29,6 +29,7 @@ def action_get_children(
         mgc: MsGraphClient,
         folder: str,
         with_pagination: bool):
+  # TODO Make column sizes adaptative
   folder_info = ObjectInfoFactory.get_object_info(mgc, folder)[1]
   folder_info.retrieve_children_info(recursive=False, depth=0)
   ls_formatter = LsFormatter(MsFileFormatter(60), MsFolderFormatter(60), False)

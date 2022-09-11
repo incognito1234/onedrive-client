@@ -26,6 +26,8 @@ from lib.file_config_helper import create_and_get_config_folder, force_permissio
 import os
 import sys
 
+# TODO Implement configure logger from file
+
 if __name__ == '__main__':
 
   args = parse_odc_args()
