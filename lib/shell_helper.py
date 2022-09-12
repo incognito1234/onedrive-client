@@ -5,6 +5,7 @@ import logging
 
 import math
 import os
+import re
 import argparse
 from platform import platform
 from unittest import expectedFailure
@@ -255,6 +256,7 @@ class OneDriveShell:
 
   def initiate_commands(self):
 
+    # Methods to buil commands
     def init_with_odshell(self2, name):
       super(self2.__class__, self2).__init__(name)
 
@@ -264,6 +266,8 @@ class OneDriveShell:
           "_do_action": doa
       })
       self.__dict_cmds[name] = new_class(name)
+
+    # Actions of commands
 
     def action_cd(self2, args):
       self.change_to_path(args.path)
@@ -303,12 +307,24 @@ class OneDriveShell:
     def action_pwd(self2, args):
       print(self.current_fi.path)
 
+    def action_l_pwd(self2, args):
+      print(os.getcwd())
+
+    def action_l_cd(self2, args):
+      os.chdir(args.path)
+      print(os.getcwd())
+
+    def action_l_ls(self2, args):
+      os.system(shlex.join(['ls'] + args.options))
+
+    # Arguments management
     myparser = OneDriveShell.ArgumentParserWithoutExit(
         prog='Onedrive Shell', usage='')
     sub_parser = myparser.add_subparsers(dest='cmd')
-    myparser.add_argument_group(title='Available commands')
 
-    sp_cd = sub_parser.add_parser('cd', help='Change Directory')
+    myparser.add_argument_group(title='Remote browsing and acting')
+    sp_cd = sub_parser.add_parser(
+        'cd', help='Change directory (also possible with fold number)')
     sp_cd.add_argument('path', type=str, help='Destination path')
 
     sp_ll = sub_parser.add_parser('ll', help='List folder with details')
@@ -319,12 +335,27 @@ class OneDriveShell:
         'pwd', help='Print full path of current folder')
     sp_get = sub_parser.add_parser(
         'get', help='Donwload file in current_folder')
-    sp_get = sp_get.add_argument('remotepath', type=str, help='remote file')
+    sp_get.add_argument('remotepath', type=str, help='remote file')
     sp_stat = sub_parser.add_parser('stat', help='Get info about object')
     sp_stat.add_argument('remotepath', type=str, help='destination object')
 
+    myparser.add_argument_group(title='Local browsing and acting')
+    sp_l_pwd = sub_parser.add_parser('!pwd', help="Print local folder")
+    sp_l_cd = sub_parser.add_parser('!cd', help="Change local folder")
+    sp_l_cd.add_argument('path', type=str, help='Destination path')
+    sp_l_ls = sub_parser.add_parser('!ls', help="List local Folder")
+    sp_l_ls.add_argument(
+        'options',
+        nargs=argparse.REMAINDER,
+        help="All other options")
+    # Workaround to allow dash in options without consuming with argparse (*)
+    sp_l_ls._negative_number_matcher = re.compile('^-.+$')
+
+    # (*) https://bugs.python.org/issue9334#msg169712
+
     self.__args_parser = myparser
 
+    # Populate commands
     self.__dict_cmds = {}
     add_new_cmd('cd', action_cd)
     add_new_cmd('ll', action_ll)
@@ -333,6 +364,9 @@ class OneDriveShell:
     add_new_cmd('stat', action_stat)
     add_new_cmd('get', action_get)
     add_new_cmd('pwd', action_pwd)
+    add_new_cmd('!pwd', action_l_pwd)
+    add_new_cmd('!cd', action_l_cd)
+    add_new_cmd('!ls', action_l_ls)
 
   def change_max_column_size(self, nb):
     self.ls_formatter = LsFormatter(MsFileFormatter(nb), MsFolderFormatter(nb))
@@ -386,20 +420,6 @@ class OneDriveShell:
         except Exception as e:
           print(f"error: {e}")
 
-      elif cmd == "!pwd":
-        print(os.getcwd())
-
-      elif cmd == "!cd":
-        if len(parts_cmd) == 2:
-          os.chdir(parts_cmd[1])
-          print(os.getcwd())
-
-      elif cmd[0:3] == "!ls":
-        os.system(my_input[1:])
-
-      elif cmd == "cd..":
-        self.change_current_folder_to_parent()
-
       elif cmd.isdigit() and int(cmd) <= len(self.current_fi.children_folder):
 
         int_input = int(cmd)
@@ -407,6 +427,9 @@ class OneDriveShell:
           self.change_current_folder_to_parent()
         else:
           self.current_fi = self.current_fi.children_folder[int(my_input) - 1]
+
+      elif cmd == "cd..":
+        self.change_current_folder_to_parent()
 
       elif my_input == "set onlyfolders" or my_input == "set of":
         self.only_folders = True
@@ -425,6 +448,13 @@ class OneDriveShell:
             print("<value> must be a number between 5 and 300")
           else:
             self.change_max_column_size(int_cs)
+
+      elif cmd == "h2":
+        if len(parts_cmd) > 1:
+          parts_cmd = [parts_cmd[1], "-h"]
+        else:
+          parts_cmd = ["-h"]
+        self.__args_parser.parse_args(parts_cmd)
 
       elif cmd == "help" or cmd == "h":
         print("Onedrive Browser Help")
