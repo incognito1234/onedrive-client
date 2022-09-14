@@ -81,6 +81,8 @@ if __name__ == '__main__':
     token = get_token_from_code(url, state)
     tr.store_token(token)
     quit()
+  else:
+    tr.init_token_from_file()
 
   if not tr.token_exists():
     print("please connect first with {} init".format(sys.argv[0]))

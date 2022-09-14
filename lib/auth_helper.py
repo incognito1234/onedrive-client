@@ -80,10 +80,16 @@ class TokenRecorder:
     return 1
 
   def __refresh_token(self, token):
+    """
+      Method called automatically by OAuth2Session when token is refreshed
+    """
     lg.info("Refresh token")
     self.store_token(token)
 
   def token_exists(self):
+    return self.token is not None
+
+  def init_token_from_file(self):
     try:
       with open(self.filename, 'r') as tokenfile:
         data = json.load(tokenfile)
