@@ -4,6 +4,7 @@
 import logging
 
 from requests_oauthlib import OAuth2Session
+from lib.strpathutil import StrPathUtil
 import json
 import os
 import pprint
@@ -108,7 +109,8 @@ class MsGraphClient:
     return 1
 
   def delete_file(self, file_path):
-    r = self.mgc.delete('{0}/me/drive/root:/{1}:'.format(
+    file_path = StrPathUtil.add_first_char_if_necessary(file_path, "/")
+    r = self.mgc.delete('{0}/me/drive/root:{1}:'.format(
         MsGraphClient.graph_url, file_path
     ))
     if r.status_code == 404:
@@ -125,8 +127,9 @@ class MsGraphClient:
     return result
 
   def put_file_content(self, dst_folder, src_file):
-
     lg.info("Start put_file_content('{0}','{1}')".format(dst_folder, src_file))
+
+    dst_folder = StrPathUtil.remove_first_char_if_necessary(dst_folder, "/")
     total_size = os.path.getsize(src_file)
     lg.debug("File size = {0}".format(total_size))
     file_name = src_file.split("/").pop()
@@ -319,13 +322,12 @@ class MsGraphClient:
       If successfull, return the name of the new folder.
       Else return none
     """
-    if (dst_path == '/') | (dst_path == ''):
+    dst_path = StrPathUtil.remove_first_char_if_necessary(dst_path, "/")
+    if dst_path == '':
       dst_url = '{0}/me/drive/root:/children'.format(MsGraphClient.graph_url)
     else:
-      # Remove first '/' if necessary
-      dst_path2 = dst_path[1:] if dst_path[0] == '/' else dst_path
       dst_url = '{0}/me/drive/root:/{1}:/children'.format(
-          MsGraphClient.graph_url, dst_path2)
+          MsGraphClient.graph_url, dst_path)
 
     data = {'name': new_folder, 'folder': {},
             '@microsoft.graph.conflictBehavior': 'rename'}
@@ -348,7 +350,9 @@ class MsGraphClient:
     return result
 
   def get_id(self, object_path: str):
-    prefixed_path = "" if object_path == "/" or object_path == "" else f":/{object_path}"
+    object_path = StrPathUtil.remove_first_char_if_necessary(object_path, "/")
+
+    prefixed_path = "" if object_path == "" else f":/{object_path}"
     r = self.mgc.get('{0}/me/drive/root{1}'.format(
         MsGraphClient.graph_url, prefixed_path
     )).json()
@@ -359,6 +363,9 @@ class MsGraphClient:
 
   def move_object(self, src_path: str, dst_path: str):
     lg.info(f"[move]Entering move_object ({src_path},{dst_path})")
+
+    src_path = StrPathUtil.remove_first_char_if_necessary(src_path, '/')
+    dst_path = StrPathUtil.remove_first_char_if_necessary(dst_path, '/')
 
     part_src_path = os.path.split(src_path)
     src_url = '{0}/me/drive/root:/{1}'.format(
