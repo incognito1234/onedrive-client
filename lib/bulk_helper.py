@@ -140,7 +140,7 @@ def mupload_folder(
   for entry in scan_dir:
 
     if entry.is_file():
-      if ms_folder.is_child_folder(entry.name):
+      if ms_folder.is_direct_child_folder(entry.name):
         lg.warning(
             '[mupload_folder]{0} is a local file but is a remote folder. Skip it'.format(
                 entry.path()))

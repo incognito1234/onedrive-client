@@ -59,11 +59,9 @@ if __name__ == '__main__':
   # https://docs.python.org/3.8/library/logging.html#levels
   lg.setLevel(50 - (args.loglevel * 10))
 
-  lg_completer = logging.getLogger("odc.browser.completer")
-  fh = logging.FileHandler("complete.txt")
-  lg_completer.propagate = False
-  lg_completer.addHandler(fh)
-  # lg_completer.setLevel(logging.DEBUG)
+  lg_odshell = logging.getLogger('odc.browser')
+  lg_odshell.setLevel(logging.DEBUG)
+  lg_odshell.addHandler(logging.StreamHandler())
 
   # Get authentication token
   config_dirname = create_and_get_config_folder()

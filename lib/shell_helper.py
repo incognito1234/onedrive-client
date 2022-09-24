@@ -229,12 +229,16 @@ class OneDriveShell:
       raise ValueError(message)
 
   # TODO Enhance help command with arguments for each command
+  # TODO Add aliases possibility
+  # TODO Keep previous history when relaunching the shell
+  # TODO Remember configuration in a file
 
   class Command(ABC):
 
     @beartype
-    def __init__(self, name: str):
+    def __init__(self, name: str, my_argparser: argparse.ArgumentParser):
       self.name = name
+      self.argp = my_argparser
 
     @beartype
     @abstractmethod
@@ -248,7 +252,8 @@ class OneDriveShell:
   def __init__(self, mgc: MsGraphClient):
     cinit()  # initialize colorama
     self.mgc = mgc
-    self.root_folder = Oif.get_object_info(mgc, "/")[1]
+    self.root_folder = Oif.get_object_info(
+        mgc, "/", no_warn_if_no_parent=True)[1]
     self.current_fi = self.root_folder
     self.only_folders = False
     self.ls_formatter = LsFormatter(MsFileFormatter(45), MsFolderFormatter(45))
@@ -257,15 +262,15 @@ class OneDriveShell:
   def initiate_commands(self):
 
     # Methods to buil commands
-    def init_with_odshell(self2, name):
-      super(self2.__class__, self2).__init__(name)
+    def init_with_odshell(self2, name, my_argparser):
+      super(self2.__class__, self2).__init__(name, my_argparser)
 
-    def add_new_cmd(name, doa):
+    def add_new_cmd(name, my_argparser, doa):
       new_class = type(f"Class_{name}", (OneDriveShell.Command, ), {
           "__init__": init_with_odshell,
           "_do_action": doa
       })
-      self.__dict_cmds[name] = new_class(name)
+      self.__dict_cmds[name] = new_class(name, my_argparser)
 
     # Actions of commands
 
@@ -275,12 +280,12 @@ class OneDriveShell:
     def action_ll(self2, args):
       self.ls_formatter.print_folder_children(
           self.current_fi, start_number=1, only_folders=self.only_folders,
-          with_pagination="-p" in args)
+          with_pagination=args.p)
 
     def action_ls(self2, args):
       self.ls_formatter.print_folder_children_lite(
           self.current_fi, only_folders=self.only_folders,
-          with_pagination="-p" in args)
+          with_pagination=args.p)
 
     def action_lls(self2, args):
       self.ls_formatter.print_folder_children_lite_next(
@@ -288,21 +293,24 @@ class OneDriveShell:
 
     def action_stat(self2, args):
       obj_name = args.remotepath
-      if self.current_fi.is_child_file(
+      if self.current_fi.relative_path_is_a_file(
               obj_name, force_children_retrieval=True):
         print(self.current_fi.get_child_file(obj_name).str_full_details())
-      elif self.current_fi.is_child_folder(obj_name):
+      elif self.current_fi.relative_path_is_a_folder(obj_name):
         print(self.current_fi.get_child_folder(obj_name).str_full_details())
       else:
         print(f"{obj_name} is not a child of current folder({self.current_fi.path})")
 
     def action_get(self2, args):
       file_name = args.remotepath
-      if self.current_fi.is_child_file(file_name):
+      if self.current_fi.relative_path_is_a_file(file_name):
         self.mgc.download_file_content(
             self.current_fi.get_child_file(file_name).path, os.getcwd())
       else:
         print(f"{file_name} is not a file of current folder({self.current_fi.path})")
+
+    def action_mv(self2, args):
+      pass
 
     def action_pwd(self2, args):
       print(self.current_fi.path)
@@ -317,33 +325,49 @@ class OneDriveShell:
     def action_l_ls(self2, args):
       os.system(shlex.join(['ls'] + args.options))
 
+    def action_do_test(self2, args):
+      lg.debug('This is action do_test')
+
     # Arguments management
     myparser = OneDriveShell.ArgumentParserWithoutExit(
         prog='Onedrive Shell', usage='')
-    sub_parser = myparser.add_subparsers(dest='cmd')
 
-    myparser.add_argument_group(title='Remote browsing and acting')
-    sp_cd = sub_parser.add_parser(
-        'cd', help='Change directory (also possible with fold number)')
+    #myparser.add_argument('num', type=int, help='num', nargs='?',default=None)
+    sub_parser = myparser.add_subparsers(dest='cmd')
+    sp_cd = sub_parser.add_parser('cd', help='Change directory')
     sp_cd.add_argument('path', type=str, help='Destination path')
 
-    sp_ll = sub_parser.add_parser('ll', help='List folder with details')
-    sp_ls = sub_parser.add_parser('ls', help='List current folder by column')
+    sp_ll = sub_parser.add_parser(
+        'll', description='List current folder with details')
+    sp_ll.add_argument(
+        '-p',
+        action='store_true',
+        default=False,
+        help='Enable pagination')
+    sp_ls = sub_parser.add_parser(
+        'ls', description='List current folder by column')
+    sp_ls.add_argument(
+        '-p',
+        action='store_true',
+        default=False,
+        help='Enable pagination')
     sp_lls = sub_parser.add_parser(
-        'lls', help='Continue listing folder in case of large folder')
+        'lls', description='Continue listing folder in case of large folder')
     sp_lls = sub_parser.add_parser(
-        'pwd', help='Print full path of current folder')
+        'pwd', description='Print full path of current folder')
     sp_get = sub_parser.add_parser(
-        'get', help='Donwload file in current_folder')
+        'get', description='Download file in current_folder')
     sp_get.add_argument('remotepath', type=str, help='remote file')
-    sp_stat = sub_parser.add_parser('stat', help='Get info about object')
+    sp_pwd = sub_parser.add_parser(
+        'pwd', description='Print full path of the current folder')
+    sp_stat = sub_parser.add_parser(
+        'stat', description='Get info about object')
     sp_stat.add_argument('remotepath', type=str, help='destination object')
 
-    myparser.add_argument_group(title='Local browsing and acting')
-    sp_l_pwd = sub_parser.add_parser('!pwd', help="Print local folder")
-    sp_l_cd = sub_parser.add_parser('!cd', help="Change local folder")
+    sp_l_pwd = sub_parser.add_parser('!pwd', description="Print local folder")
+    sp_l_cd = sub_parser.add_parser('!cd', description="Change local folder")
     sp_l_cd.add_argument('path', type=str, help='Destination path')
-    sp_l_ls = sub_parser.add_parser('!ls', help="List local Folder")
+    sp_l_ls = sub_parser.add_parser('!ls', description="List local Folder")
     sp_l_ls.add_argument(
         'options',
         nargs=argparse.REMAINDER,
@@ -357,16 +381,16 @@ class OneDriveShell:
 
     # Populate commands
     self.__dict_cmds = {}
-    add_new_cmd('cd', action_cd)
-    add_new_cmd('ll', action_ll)
-    add_new_cmd('ls', action_ls)
-    add_new_cmd('lls', action_lls)
-    add_new_cmd('stat', action_stat)
-    add_new_cmd('get', action_get)
-    add_new_cmd('pwd', action_pwd)
-    add_new_cmd('!pwd', action_l_pwd)
-    add_new_cmd('!cd', action_l_cd)
-    add_new_cmd('!ls', action_l_ls)
+    add_new_cmd('cd', sp_cd, action_cd)
+    add_new_cmd('ll', sp_ll, action_ll)
+    add_new_cmd('ls', sp_ls, action_ls)
+    add_new_cmd('lls', sp_lls, action_lls)
+    add_new_cmd('stat', sp_stat, action_stat)
+    add_new_cmd('get', sp_get, action_get)
+    add_new_cmd('pwd', sp_pwd, action_pwd)
+    add_new_cmd('!pwd', sp_l_pwd, action_l_pwd)
+    add_new_cmd('!cd', sp_l_cd, action_l_cd)
+    add_new_cmd('!ls', sp_l_ls, action_l_ls)
 
   def change_max_column_size(self, nb):
     self.ls_formatter = LsFormatter(MsFileFormatter(nb), MsFolderFormatter(nb))
@@ -409,7 +433,7 @@ class OneDriveShell:
       else:
         cmd = ""
 
-      if cmd == "quit":
+      if cmd in ("q", "quit", "exit"):
         break
 
       if cmd in self.__dict_cmds:
@@ -449,36 +473,28 @@ class OneDriveShell:
           else:
             self.change_max_column_size(int_cs)
 
-      elif cmd == "h2":
-        if len(parts_cmd) > 1:
-          parts_cmd = [parts_cmd[1], "-h"]
-        else:
-          parts_cmd = ["-h"]
-        self.__args_parser.parse_args(parts_cmd)
+      elif cmd == "help":
+        if len(parts_cmd) == 1:
+          print("Available commands")
+          for (k, v) in self.__dict_cmds.items():
+            print(f"    {k:14}{v.argp.description}")
 
-      elif cmd == "help" or cmd == "h":
-        print("Onedrive Browser Help")
-        print("")
-        print("COMMAND")
-        print("   set onlyfolders")
-        print("   set of                : Retrieve info only about folders")
-        print("   set noonlyfolders")
-        print("   set noof              : Retrieve info about folders and files")
-        print("   set columnsize")
-        print("   set cs                : Set column size for name")
-        print("   ls                    : List current folder by columns")
-        print("   lls                   : Continue listing folder in case of large folder")
-        print("   cd <folder path>      : Change to folder path")
-        print("   get <file_path>       : Download <file_path> in current folder")
-        print("   stat <object_path>    : Get info about object")
-        print("   ll                    : List Folder with details")
-        print("   pwd                   : Print full path of current folder")
-        print("   <number>              : Dig into given folder")
-        print("   !pwd                  : Print local folder")
-        print("   !cd <folder>          : Change to local folder")
-        print("   !ls                   : List children of local folder")
-        print("   q")
-        print("   quit                  : Quit Browser")
+          print(f"    {'<number>':14}Browse to folder <number>")
+          print(f"    {'set':14}Set a variable")
+          print(f"    {'q/quit/exit':14}Quit the shell")
+
+        elif len(parts_cmd) == 2:
+          if parts_cmd[1] in self.__dict_cmds:
+            self.__dict_cmds[parts_cmd[1]].argp.print_help()
+          elif parts_cmd[1] == "set":
+            print("usage:")
+            print("   set ( (<variable>|no<variable) | ( <variable>=<value> )")
+            print()
+            print("Variables that can be set and their aliases")
+            print("    onlyfolders/of      boolean       Retrieve info about folders")
+            print(
+                "    columnsize/cs       int           Column Size of folder names and files names")
+            print("                                      for long listing")
 
       elif cmd == "":
         pass
@@ -507,7 +523,7 @@ class OneDriveShell:
     # Compute relative path from root_folder
     full_path = self.full_path_from_root_folder(folder_path)
 
-    if self.root_folder.is_child_folder(
+    if self.root_folder.relative_path_is_a_folder(
             full_path, force_children_retrieval=True):
       self.current_fi = self.root_folder.get_child_folder(full_path)
 
