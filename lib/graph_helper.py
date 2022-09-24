@@ -390,6 +390,9 @@ class MsGraphClient:
       lg.error(f"[move]Error during move: {r.reason}")
       return False
 
+  def close(self):
+    self.mgc.close()
+
   class RetryStatus:
 
     def __init__(self, max_retry=5):

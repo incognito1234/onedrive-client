@@ -129,4 +129,4 @@ if __name__ == '__main__':
   if args.command == "qxh":
     action_qxh(args.srcfile)
 
-# TODO close mgc
+  mgc.close()
