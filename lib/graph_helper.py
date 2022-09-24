@@ -17,6 +17,8 @@ class MsGraphClient:
 
   graph_url = 'https://graph.microsoft.com/v1.0'
 
+  (TYPE_NONE, TYPE_FILE, TYPE_FOLDER) = (0, 1, 2)
+
   def __init__(self, mgc: OAuth2Session):
     self.mgc = mgc
 
@@ -348,6 +350,23 @@ class MsGraphClient:
 
     return result
 
+  def path_type(self, path):
+    """
+      Return TYPE_FILE, TYPE_FOLDER, TYPE_NONE
+    """
+    path = StrPathUtil.remove_first_char_if_necessary(path, "/")
+    prefixed_path = "" if path == "" else f":/{path}"  # Consider root
+    r = self.mgc.get('{0}/me/drive/root{1}'.format(
+        MsGraphClient.graph_url, prefixed_path
+    )).json()
+    if 'error' in r:
+      return MsGraphClient.TYPE_NONE
+
+    if ('folder' in r):
+      return MsGraphClient.TYPE_FOLDER
+    else:
+      return MsGraphClient.TYPE_FILE
+
   def get_id(self, object_path: str):
     object_path = StrPathUtil.remove_first_char_if_necessary(object_path, "/")
 
@@ -366,10 +385,25 @@ class MsGraphClient:
     src_path = StrPathUtil.remove_first_char_if_necessary(src_path, '/')
     dst_path = StrPathUtil.remove_first_char_if_necessary(dst_path, '/')
 
-    part_src_path = os.path.split(src_path)
     src_url = '{0}/me/drive/root:/{1}'.format(
         MsGraphClient.graph_url, src_path)
-    id_parent = self.get_id(dst_path)
+
+    type_dst = self.path_type(dst_path)
+
+    if type_dst == MsGraphClient.TYPE_FOLDER:
+      id_parent = self.get_id(dst_path)
+      part_src_path = os.path.split(src_path)
+      dst_name = part_src_path[1]
+
+    elif type_dst == MsGraphClient.TYPE_FILE:
+      lg.error("[move]Destination file already exists")
+      return False
+
+    else:  # type_dst == MsGraphClient.TYPE_NONE
+      part_dst_path = os.path.split(dst_path)
+      id_parent = self.get_id(part_dst_path[0])
+      dst_name = part_dst_path[1]
+
     if id_parent is None:
       lg.error("[move]parent not found")
       return False
@@ -379,7 +413,7 @@ class MsGraphClient:
         "parentReference": {
             "id": id_parent
         },
-        "name": part_src_path[1]
+        "name": dst_name
     }
     data_json = json.dumps(data)
     r = self.mgc.patch(src_url, headers=headers, data=data_json)
