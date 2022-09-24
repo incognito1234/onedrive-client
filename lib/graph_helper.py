@@ -324,7 +324,7 @@ class MsGraphClient:
     """
     dst_path = StrPathUtil.remove_first_char_if_necessary(dst_path, "/")
     if dst_path == '':
-      dst_url = '{0}/me/drive/root:/children'.format(MsGraphClient.graph_url)
+      dst_url = '{0}/me/drive/root/children'.format(MsGraphClient.graph_url)
     else:
       dst_url = '{0}/me/drive/root:/{1}:/children'.format(
           MsGraphClient.graph_url, dst_path)
