@@ -60,7 +60,7 @@ if __name__ == '__main__':
   lg.setLevel(50 - (args.loglevel * 10))
 
   lg_odshell = logging.getLogger('odc.browser')
-  lg_odshell.setLevel(logging.DEBUG)
+  lg_odshell.setLevel(logging.ERROR)
   lg_odshell.addHandler(logging.StreamHandler())
 
   # Get authentication token

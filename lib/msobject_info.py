@@ -18,22 +18,34 @@ lg = logging.getLogger('odc.msobject')
 class MsObject(ABC):
 
   @beartype
-  def __init__(self, parent: Optional["MsFolderInfo"], ms_id: str, size: int):
+  def __init__(
+          self,
+          parent: Optional["MsFolderInfo"],
+          name: str,
+          parent_path: str,
+          ms_id: str,
+          size: int,
+          is_root: bool = False):
     # Parent stat must not been updated if parent has just been initiated through mgc_response:
     #   - mgc_response contains child count, size but not all children
     self.ms_id = ms_id  # id is a keyword in python
     self.__size = size
     self.parent = parent
+    self.__name = name
+    self.__parent_path = parent_path
+    self.__is_root = is_root  # only used to compute path
 
   @property
-  @abstractmethod
   def path(self):
-    pass
+    return "" if self.__is_root else f"{self.__parent_path}/{self.__name}"
 
   @property
-  @abstractmethod
+  def parent_path(self):
+    return self.__parent_path
+
+  @property
   def name(self):
-    pass
+    return self.__name
 
   @property
   def size(self):
@@ -76,10 +88,18 @@ class MsObject(ABC):
   def move_object(self, new_parent: "MsFolderInfo"):
     self.update_parent_before_removal()
     self.parent = new_parent
+    self.__parent_path = new_parent.path
     self.update_parent_after_arrival(new_parent)
 
+  @beartype
+  def rename(self, new_name: str):
+    self.update_parent_before_removal()
+    self.__name = new_name
+    self.update_parent_after_arrival(self.parent)
+
   @staticmethod
-  def get_lastfolderinfo_path(root_fi, input, current_fi=None):
+  def get_lastfolderinfo_path(
+          root_fi, input, current_fi=None) -> Tuple[Optional["MsFolderInfo"], Optional[str]]:
     """
       Return a tuple (<last_folder_info_path>, <remaining_text>)
     """
@@ -143,21 +163,20 @@ class MsFolderInfo(MsObject):
   def __init__(
           self,
           name: str,
-          full_path: str,
+          parent_path: str,
           mgc: MsGraphClient,
           id: str,
           size: int,
           child_count: int = None,
           parent=None,
           lmdt=None,
-          cdt=None):
+          cdt=None,
+          is_root: bool = False):
     """
         Init folder info
         mgc   = MsGraphClient
     """
-    super().__init__(parent, id, size)
-    self.__full_path = full_path
-    self.__name = name
+    super().__init__(parent, name, parent_path, id, size, is_root)
     self.__mgc = mgc
     self.children_file = []
     self.children_folder = []
@@ -172,14 +191,6 @@ class MsFolderInfo(MsObject):
 
     self.last_modified_datetime = lmdt
     self.creation_datetime = cdt
-
-  def get_full_path(self):
-    return self.__full_path
-  path = property(get_full_path)
-
-  def _get_name(self):
-    return self.__name
-  name = property(_get_name)
 
   @beartype
   def _remove_info_for_child(self, child: MsObject):
@@ -196,7 +207,7 @@ class MsFolderInfo(MsObject):
           recursive=False,
           depth=999):
     lg.debug(
-        f"[retrieve_children_info] {self.get_full_path()} - only_folders = {only_folders} - depth = {depth}")
+        f"[retrieve_children_info] {self.path} - only_folders = {only_folders} - depth = {depth}")
 
     if depth > 0 and (
         only_folders and not self.folders_retrieval_has_started()
@@ -204,7 +215,7 @@ class MsFolderInfo(MsObject):
     ):
 
       (ms_response, next_link) = self.__mgc.get_ms_response_for_children_folder_path(
-          self.get_full_path(), only_folders)
+          self.path, only_folders)
       self.next_link_children = next_link
 
       for c in ms_response:
@@ -225,7 +236,7 @@ class MsFolderInfo(MsObject):
 
       self.__add_default_folder_info()
       lg.debug(
-          f"[retrieve_children_info] {self.get_full_path()} - setting retrieval status")
+          f"[retrieve_children_info] {self.path} - setting retrieval status")
 
       if not only_folders:
         self.__children_files_retrieval_status = "partial" if self.next_link_children is not None else "all"
@@ -238,7 +249,7 @@ class MsFolderInfo(MsObject):
           recursive=False,
           depth=999):
     lg.debug(
-        f"[retrieve_children_info_next] {self.get_full_path()} - only_folders = {only_folders} - depth = {depth}")
+        f"[retrieve_children_info_next] {self.path} - only_folders = {only_folders} - depth = {depth}")
 
     if depth > 0 and (
         only_folders and not self.__children_folders_retrieval_status != "all"
@@ -275,11 +286,11 @@ class MsFolderInfo(MsObject):
       self.__children_folders_retrieval_status = "partial" if self.next_link_children is not None else "all"
 
   def create_empty_subfolder(self, folder_name):
-    folder_json = self.__mgc.create_folder(self.get_full_path(), folder_name)
+    folder_json = self.__mgc.create_folder(self.path, folder_name)
     if folder_json:
       new_folder_info = MsFolderInfo(
           folder_name,
-          "{0}/{1}".format(self.get_full_path(), folder_name),
+          "{0}/{1}".format(self.path, folder_name),
           self.__mgc,
           id=folder_json["id"],
           size=0,
@@ -341,7 +352,10 @@ class MsFolderInfo(MsObject):
       self.retrieve_children_info(only_folders=False)
     return self.__dict_children_file[file_name] if file_name in self.__dict_children_file else None
 
-  def get_child_file(self, relative_file_path, force_children_retrieval=False):
+  def get_child_file(
+          self,
+          relative_file_path,
+          force_children_retrieval=False) -> Optional["MsFileInfo"]:
     path_parts = relative_file_path.split(os.sep)
     search_folder = self
     i = 0
@@ -387,6 +401,17 @@ class MsFolderInfo(MsObject):
         relative_file_path,
         force_children_retrieval) is not None
 
+  def relative_path_is_a_child(
+          self,
+          relative_path,
+          force_children_retrieval=False):
+    return (
+        self.relative_path_is_a_file(
+            relative_path,
+            force_children_retrieval) or self.relative_path_is_a_folder(
+            relative_path,
+            force_children_retrieval))
+
   def files_retrieval_has_started(self):
     return self.__children_files_retrieval_status == "all" or self.__children_files_retrieval_status == "partial"
 
@@ -409,7 +434,7 @@ class MsFolderInfo(MsObject):
 
   def str_full_details(self):
     result = (
-        f"Folder - {self.get_full_path()[1:]}\n"
+        f"Folder - {self.path[1:]}\n"
         f"  name                            = {self.name}\n"
         f"  id                              = {self.ms_id}\n"
         f"  size                            = {self.size}\n"
@@ -430,26 +455,16 @@ class MsFileInfo(MsObject):
           self, name, parent_path, mgc, file_id,
           size, qxh, s1h, cdt, lmdt, parent=None):
     # qxh = quickxorhash
-    super().__init__(parent, file_id, size)
+    super().__init__(parent, name, parent_path, file_id, size)
     self.mgc = mgc
-    self.__name = name
-    self.__parent_path = parent_path
     self.sha1hash = s1h
     self.qxh = qxh
     self.creation_datetime = cdt
     self.last_modified_datetime = lmdt
 
-  def _get_path(self):
-    return "/{0}/{1}".format(self.__parent_path, self.__name)
-  path = property(_get_path)
-
   def _get_id(self):
     return self.__id
   id = property(_get_id)
-
-  def _get_name(self):
-    return self.__name
-  name = property(_get_name)
 
   def __str__(self):
     fname = f"{self.name}" if len(self.name) < 45 else f"{self.name[:40]}..."
@@ -529,7 +544,8 @@ class ObjectInfoFactory:
     # Workaround following what seems to be a bug. Space is replaced by "%20" sequence
     #   in mgc_response when parent name contains a space
     if parent is not None:
-      parent_path = parent.get_full_path()
+      parent_path = parent.path
+      is_root = False
     else:
       if not no_warn_if_no_parent:
         lg.warning(
@@ -537,12 +553,14 @@ class ObjectInfoFactory:
       if 'parentReference' in mgc_response_json and 'path' in mgc_response_json[
               'parentReference']:
         parent_path = mgc_response_json['parentReference']['path'][12:]
+        is_root = False
       else:
         parent_path = ""
+        is_root = True
 
-    full_path = "" if "root" in mgc_response_json else f"{parent_path}/{mgc_response_json['name']}"
+    #full_path = "" if "root" in mgc_response_json else f"{parent_path}/{mgc_response_json['name']}"
     result = MsFolderInfo(
-        full_path=full_path,
+        parent_path=parent_path,
         name=mgc_response_json['name'],
         mgc=mgc,
         id=mgc_response_json['id'],
@@ -550,7 +568,8 @@ class ObjectInfoFactory:
         size=mgc_response_json['size'],
         parent=parent,
         lmdt=str_from_ms_datetime(mgc_response_json['lastModifiedDateTime']),
-        cdt=str_from_ms_datetime(mgc_response_json['createdDateTime'])
+        cdt=str_from_ms_datetime(mgc_response_json['createdDateTime']),
+        is_root=is_root
     )
     if parent is not None:
       parent._MsFolderInfo__add_folder_info_if_necessary(result)

@@ -22,7 +22,9 @@ from re import fullmatch
 from beartype import beartype
 
 from lib.graph_helper import MsGraphClient
-from lib.msobject_info import MsFileInfo, MsFolderInfo, ObjectInfoFactory as Oif, StrPathUtil
+from lib.msobject_info import (
+    MsFileInfo, MsFolderInfo, MsObject,
+    ObjectInfoFactory as Oif, StrPathUtil)
 
 lg = logging.getLogger('odc.browser')
 
@@ -232,6 +234,7 @@ class OneDriveShell:
   # TODO Add aliases possibility
   # TODO Keep previous history when relaunching the shell
   # TODO Remember configuration in a file
+  # TODO Emphasize shell output by avoiding print command
 
   class Command(ABC):
 
@@ -310,7 +313,45 @@ class OneDriveShell:
         print(f"{file_name} is not a file of current folder({self.current_fi.path})")
 
     def action_mv(self2, args):
-      pass
+      # lfip = last_folder_info_path
+      # rt = remaining_text
+
+      # Compute source path
+      (lfip_src, rt_src) = MsObject.get_lastfolderinfo_path(
+          self.root_folder, args.srcpath, self.current_fi)
+      if lfip_src.relative_path_is_a_file(rt_src, True):
+        src_obj = lfip_src.get_child_file(rt_src)
+      elif lfip_src.relative_path_is_a_folder(rt_src, True):
+        src_obj = lfip_src.get_child_folder(rt_src)
+      else:
+        print(f"'{args.srcpath}' is not a path of a remote object")
+        return False
+
+      # Compute dest path
+      (lfip_dst, rt_dst) = MsObject.get_lastfolderinfo_path(
+          self.root_folder, args.dstpath, self.current_fi)
+      if lfip_dst.relative_path_is_a_folder(rt_dst, True):
+        is_a_renaming = False
+        dst_parent = lfip_dst.get_child_folder(rt_dst)
+        dst_path2 = os.path.normpath(
+            f"{dst_parent.path}/{rt_src}")
+      elif lfip_dst.relative_path_is_a_file(rt_dst, True):
+        return False
+      else:
+        is_a_renaming = True
+        new_name = rt_dst
+        dst_parent = lfip_dst
+        dst_path2 = os.path.normpath(f"{lfip_dst.path}/{rt_dst}")
+
+      lg.debug(f"move('{src_obj.path}','{dst_path2}')")
+
+      r = self.mgc.move_object(src_obj.path, dst_path2)
+      if not r:
+        print(f"[Move]An error occured")
+        return False
+      if is_a_renaming:
+        src_obj.rename(new_name)
+      src_obj.move_object(dst_parent)
 
     def action_pwd(self2, args):
       print(self.current_fi.path)
@@ -356,8 +397,18 @@ class OneDriveShell:
     sp_lls = sub_parser.add_parser(
         'pwd', description='Print full path of current folder')
     sp_get = sub_parser.add_parser(
-        'get', description='Download file in current_folder')
+        'get', description='Download file in current folder')
     sp_get.add_argument('remotepath', type=str, help='remote file')
+    sp_mv = sub_parser.add_parser(
+        'mv', description='Move or rename a file or a folder')
+    sp_mv.add_argument(
+        'srcpath',
+        type=str,
+        help='Path of the remote file or folder')
+    sp_mv.add_argument(
+        'dstpath',
+        type=str,
+        help='Destination path of file or folder')
     sp_pwd = sub_parser.add_parser(
         'pwd', description='Print full path of the current folder')
     sp_stat = sub_parser.add_parser(
@@ -387,6 +438,7 @@ class OneDriveShell:
     add_new_cmd('lls', sp_lls, action_lls)
     add_new_cmd('stat', sp_stat, action_stat)
     add_new_cmd('get', sp_get, action_get)
+    add_new_cmd('mv', sp_mv, action_mv)
     add_new_cmd('pwd', sp_pwd, action_pwd)
     add_new_cmd('!pwd', sp_l_pwd, action_l_pwd)
     add_new_cmd('!cd', sp_l_cd, action_l_cd)
@@ -509,11 +561,7 @@ class OneDriveShell:
        Else path from current_folder is considered
     """
     if str_path[0] != os.sep:
-      result = os.path.normpath(
-          self.current_fi.get_full_path() +
-          os.sep +
-          str_path)[
-          1:]
+      result = os.path.normpath(self.current_fi.path + os.sep + str_path)[1:]
     else:
       result = os.path.normpath(str_path[1:])
     return result
