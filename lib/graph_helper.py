@@ -15,6 +15,8 @@ lg = logging.getLogger("odc.msgraph")
 
 class MsGraphClient:
 
+  # TODO Implement copy feature
+
   graph_url = 'https://graph.microsoft.com/v1.0'
 
   (TYPE_NONE, TYPE_FILE, TYPE_FOLDER) = (0, 1, 2)
