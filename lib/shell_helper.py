@@ -365,6 +365,9 @@ class Completer:
           sub_completer = SubCompleterLocalCommand()
           self.values = sub_completer.values(line)
 
+        else:
+          self.values = []
+
       if state < len(self.values):
         self.__log_debug(f"  --> return {self.values[state]}")
         return self.values[state].candidate
