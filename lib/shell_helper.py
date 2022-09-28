@@ -7,17 +7,20 @@ import math
 import os
 import re
 import argparse
+import subprocess
 from platform import platform
 from unittest import expectedFailure
 from colorama import Fore, Style, init as cinit
 from io import StringIO
+from abc import ABC, abstractmethod
 import sys
 # readline introduce history management in prompt
 import readline
 import shlex
 import pydoc
 from abc import ABC, abstractmethod
-from re import fullmatch
+import re
+from typing import List, Optional
 
 from beartype import beartype
 
@@ -29,46 +32,12 @@ from lib.msobject_info import (
 lg = logging.getLogger('odc.browser')
 
 
-class Completer:
+class CommonCompleter:
+  """ Class to gather methods used in SubCompleter
+  """
 
-  #
-  # Everything is replaced in the readline buffer to managed folder name with space
-  #
-  # To avoid misunderstanding, only the folder name is displayed in the
-  # match list
-
-  def __init__(self, odshell):
-    self.shell = odshell
-    self.values = []
-    self.start_line = ""
-    self.new_start_line = ""
-    self.columns_printer = ColumnsPrinter(2)
-    self.lg_complete = logging.getLogger("odc.browser.completer")
-
-  def __log_debug(self, what):
-    self.lg_complete.debug(f"[complete]{what}")
-
-  def display_matches(self, what, matches, longest_match_length):
-    try:
-      self.__log_debug(f"[display matches]dm('{what}',{matches})")
-      print("")
-
-      # remove start_line from matches and convert to FormattedString
-      to_be_printed_str = map(lambda x: x[len(self.new_start_line):], matches)
-      to_be_printed = list(
-          map(
-              lambda x: FormattedString.build_from_string(x),
-              to_be_printed_str))
-      self.columns_printer.print_with_columns(to_be_printed)
-      print(
-          f"{self.shell.get_prompt()}{readline.get_line_buffer()}",
-          end="",
-          flush=True)
-
-    except Exception as e:
-      print(f"Exception = {e}")
-
-  def __get_cmd_parts_with_quotation_guess(self, input):
+  @staticmethod
+  def get_cmd_parts_with_quotation_guess(input):
     try:
       # WARNING: does not work with win32 if a backslash is included in input
       return shlex.split(input)
@@ -79,8 +48,10 @@ class Completer:
 
       except ValueError as e:
         return shlex.split(input + '"')
+  pass
 
-  def __extract_raw_last_args(self, input, parsed_last_arg):
+  @staticmethod
+  def extract_raw_last_args(input, parsed_last_arg):
     """
       Extract raw last args (with quote and escape chars) from input line.
       parsed_last_args is the last argument without quote and escape chars.
@@ -101,7 +72,8 @@ class Completer:
     while i > 1:
 
       raw_last_args = part_args[i] + raw_last_args  # append last args to left
-      part_std_shlex = self.__get_cmd_parts_with_quotation_guess(raw_last_args)
+      part_std_shlex = CommonCompleter.get_cmd_parts_with_quotation_guess(
+          raw_last_args)
 
       if len(part_std_shlex) > 0:
         last_arg_std_shlex = part_std_shlex[0]
@@ -115,9 +87,265 @@ class Completer:
 
       i = i - 1
 
-    self.__log_debug(
-        f'extract_raw_last_args("{input}","{parsed_last_arg}") not found')
+   # self.__log_debug(f'extract_raw_last_args("{input}","{parsed_last_arg}") not found')
     return None
+
+
+class SubCompleter(ABC):
+
+  class SCResult():
+    """ SubCompleter Result
+
+    :param str candidate:       What will replace the line once it will be chosen
+    :param str to_be_displayed: What will be displayed
+    """
+    @beartype
+    def __init__(self, candidate: str, to_be_displayed: str):
+
+      self.candidate = candidate
+      self.to_be_displayed = to_be_displayed
+
+  @beartype
+  def __init__(self):
+    pass
+
+  @abstractmethod
+  @beartype
+  def values(self, line: str) -> List[SCResult]:
+    """  Compute candidates and displayed values regarding the line
+
+    :param str line: List of candidates and displayed values
+    """
+    pass
+
+
+class SubCompleterFileOrFolder(SubCompleter):
+
+  @beartype
+  def __init__(self, ods: "OneDriveShell", only_folder: bool):
+    super(self.__class__, self).__init__()
+    self.ods = ods
+    self.__only_folder = only_folder
+
+  @beartype
+  def values(self, line: str) -> List[SubCompleter.SCResult]:
+    parts_cmd = CommonCompleter.get_cmd_parts_with_quotation_guess(line)
+
+    if len(parts_cmd) > 1:
+      last_arg = parts_cmd[-1]
+      was_relative_path = len(last_arg) > 0 and last_arg[0] != '/'
+
+      # lfip = last_folder_info_path   -  rt = remaining test
+      (lfip, rt) = MsObject.get_lastfolderinfo_path(
+          self.ods.root_folder, last_arg, self.ods.current_fi)
+      if lfip is None:  # Non existing folder
+        return []
+      start_text = rt
+      folder_names_str = lfip.path + os.sep
+      if was_relative_path and folder_names_str.startswith(
+              self.ods.current_fi.path):
+        folder_names_str = folder_names_str[(
+            len(self.ods.current_fi.path) + 1):]
+      search_folder = lfip
+    else:
+      start_text = ""
+      folder_names_str = ""
+      search_folder = self.ods.current_fi
+
+    # Extract start of last arguments to be escaped if necessary. Other
+    # arguments won't be changed
+    if len(parts_cmd) > 1:
+      raw_last_arg = CommonCompleter.extract_raw_last_args(line, parts_cmd[-1])
+      start_line = line[:-(len(raw_last_arg))]
+    else:  # len(parts_cmd) == 1
+      start_line = line + " "
+
+    new_start_line = start_line + StrPathUtil.escape_str(folder_names_str)
+
+    # Compute list of substitute string
+    #   1. Compute folder names
+    #   2. Append os.sep to all folders
+    #   3. Keep folders whose name starts with start_text
+    #   4. Add escaped folder name
+    search_folder.retrieve_children_info(only_folders=self.__only_folder)
+    if self.__only_folder:
+      all_children = search_folder.children_folder
+    else:
+      all_children = search_folder.children_folder + search_folder.children_file
+    folders = map(
+        lambda x: f"{x.name}{os.sep if isinstance(x, MsFolderInfo) else ''}",
+        all_children)
+    folders = filter(lambda x: x.startswith(start_text), folders)
+    folders = map(lambda x: StrPathUtil.escape_str(x), folders)
+    map_values = map(
+        lambda x: SubCompleter.SCResult(
+            f"{new_start_line}{x}", x), folders)
+    list_values = list(map_values)
+    return list_values
+
+
+class SubCompleterLocalCommand(SubCompleter):
+  """ SubCompleter for local command
+
+    Based on the following snippets:
+       https://gist.github.com/mkhon/ad39dd3e54dd783b63d4
+  """
+  RE_SPACE = re.compile('.*\\s+$', re.M)
+
+  def __init__(self):
+    super(self.__class__, self).__init__()
+    self.builtins = None
+    self.commands = {
+        'foo': True,
+        'bar': False,
+    }
+    self.cmd_lookup = None
+    self.path_lookup = None
+
+    # try to get shell builtins
+    shell = os.environ.get('SHELL')
+    if shell:
+      p = subprocess.Popen([shell, '-c', 'compgen -b'],
+                           stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+      out, err = p.communicate()
+      self.builtins = dict((key.decode(), True) for key in out.split())
+    if not self.builtins:
+      self.builtins = {'cd': True}
+
+  def _generate(self, prefix):
+    def begins_with(s): return s[:len(prefix)] == prefix
+    self.cmd_lookup = {}
+    #lg.debug("Entering generate")
+
+    # append commands in PATH
+    for path in map(os.path.expanduser, os.environ.get('PATH', '').split(':')):
+      if not os.path.isdir(path):
+        continue
+
+      for f in filter(begins_with, os.listdir(path)):
+        self.cmd_lookup[f] = True
+
+    # append shell builtins
+    for n in filter(begins_with, self.builtins.keys()):
+      self.cmd_lookup[n] = self.builtins[n]
+
+    # append COMMANDS
+    for n in filter(begins_with, self.commands.keys()):
+      self.cmd_lookup[n] = self.commands[n]
+    # print "\nGenerated commands for prefix %s: %s" % (`prefix`,
+    # `self.cmd_lookup`)
+
+  def _listdir(self, root):
+    "List directory 'root' appending the path separator to subdirs."
+    res = []
+    for name in os.listdir(root):
+      path = os.path.join(root, name)
+      if os.path.isdir(path):
+        name += os.sep
+      res.append(name)
+    return res
+
+  def _complete_path(self, path=None):
+    "Perform completion of filesystem path."
+    if not path:
+      return self._listdir('.')
+    dirname, rest = os.path.split(path)
+    tmp = dirname if dirname else '.'
+    res = [os.path.join(dirname, p)
+           for p in self._listdir(tmp) if p.startswith(rest)]
+    # more than one match, or single match which does not exist (typo)
+    if len(res) > 1 or not os.path.exists(path):
+      return res
+    # resolved to a single directory, so return list of files below it
+    if os.path.isdir(path):
+      return [os.path.join(path, p) for p in self._listdir(path)]
+    # exact file match terminates this completion
+    return [path + ' ']
+
+  def values(self, line: str) -> List[SubCompleter.SCResult]:
+    "Generic readline completion entry point."
+
+    try:
+      buffer = readline.get_line_buffer()
+      buffer = buffer[1:]  # remove first '!'
+      line = buffer.split()
+      # account for last argument ending in a space
+      if line and SubCompleterLocalCommand.RE_SPACE.match(buffer):
+        line.append('')
+
+      text = line[-1]
+      # command completion
+      if len(line) < 2:
+        self._generate(text)
+        result = [c + ' ' for c in self.cmd_lookup.keys()]
+        return list(map(lambda x: SubCompleter.SCResult(f"!{x}", x), result))
+
+      else:
+        # check if we should do path completion
+        start_line = ' '.join(line[:-1])
+        cmd = line[0]
+        if not self.cmd_lookup:
+          self._generate(cmd)
+        if cmd not in self.cmd_lookup or not self.cmd_lookup[cmd]:
+          return []
+        result = self._complete_path(os.path.expanduser(text))
+        return list(
+            map(
+                lambda x: SubCompleter.SCResult(
+                    f"!{start_line} {x}",
+                    x),
+                result))
+
+    except Exception as e:
+      lg.error(f"[subCompleter shell]Error '{e}'")
+
+
+class SubCompleterNone(SubCompleter):
+  def __init__(self):
+    pass
+
+  @beartype
+  def values(self, line: str) -> List[SubCompleter.SCResult]:
+    return []
+
+
+class Completer:
+  """
+  Everything is replaced in the readline buffer to managed folder name with space
+
+   To avoid misunderstanding, only the folder name is displayed in the match list
+  """
+
+  def __init__(self, odshell):
+    self.shell = odshell
+    self.values = []
+    self.start_line = ""
+    self.new_start_line = ""
+    self.columns_printer = ColumnsPrinter(2)
+    self.lg_complete = logging.getLogger("odc.browser.completer")
+
+  def __log_debug(self, what):
+    self.lg_complete.debug(f"[complete]{what}")
+
+  def display_matches(self, what, matches, longest_match_length):
+    try:
+      self.__log_debug(f"[display matches]dm('{what}',{matches})")
+      print("")
+
+      # remove start_line from matches and convert to FormattedString
+      to_be_printed = list(
+          map(
+              lambda x: FormattedString.build_from_string(
+                  x.to_be_displayed),
+              self.values))
+      self.columns_printer.print_with_columns(to_be_printed)
+      print(
+          f"{self.shell.get_prompt()}{readline.get_line_buffer()}",
+          end="",
+          flush=True)
+
+    except Exception as e:
+      print(f"Exception = {e}")
 
   @beartype
   def complete(self, text: str, state: int):
@@ -126,90 +354,22 @@ class Completer:
     line = readline.get_line_buffer()
     try:
 
-      parts_cmd = self.__get_cmd_parts_with_quotation_guess(line)
+      if state == 0:
+        parts_cmd = CommonCompleter.get_cmd_parts_with_quotation_guess(line)
 
-      if len(parts_cmd) > 0 and (parts_cmd[0] in ("cd", "get", "stat", "mv")):
+        if len(parts_cmd) > 0 and (parts_cmd[0] in self.shell.dict_cmds):
+          sub_completer = self.shell.dict_cmds[parts_cmd[0]].sub_completer
+          self.values = sub_completer.values(line)
 
-        #
-        # Complete with remote folder or file
-        #
+        elif len(parts_cmd) > 0 and parts_cmd[0][0] == "!":
+          sub_completer = SubCompleterLocalCommand()
+          self.values = sub_completer.values(line)
 
-        cmd = parts_cmd[0]
-
-        if state == 0:
-          # Get last part of full_path and extract start_text of folder name
-          if len(parts_cmd) > 1:
-            folder_names_str = parts_cmd[-1]
-            folder_names = StrPathUtil.split_path(folder_names_str)
-
-            if folder_names_str[-1] == os.sep:  # Last part is a folder
-              start_text = ""
-            else:
-              start_text = folder_names[-1]
-              # remove the last folder name which is the start text
-              folder_names = folder_names[:-1]
-              folder_names_str = os.sep.join(folder_names)
-              if len(folder_names) > 0:  # was 1 before removing
-                folder_names_str = folder_names_str + os.sep
-
-            if len(
-                    folder_names) > 1 and folder_names[0] == '':  # This is a absolute path
-              search_folder = self.shell.root_folder
-              folder_names = folder_names[1:]  # Remove first item which is ""
-            else:
-              search_folder = self.shell.current_fi
-
-          else:
-            folder_names_str = ""
-            folder_names = []
-            start_text = ""
-            search_folder = self.shell.current_fi
-
-          # Extract start of text to be escaped if necessary
-          if len(parts_cmd) > 1:
-            raw_last_arg = self.__extract_raw_last_args(line, parts_cmd[-1])
-            start_line = line[:-(len(raw_last_arg))]
-          else:  # len(parts_cmd) == 1
-            start_line = line + " "
-
-          self.new_start_line = start_line + \
-              StrPathUtil.escape_str(folder_names_str)
-
-          # Get folder info of last folders in given path
-          for f in folder_names:
-            if search_folder.is_direct_child_folder(f, True):
-              search_folder = search_folder.get_direct_child_folder(f, True)
-            else:
-              break
-
-          # Compute list of substitute string
-          #   1. Compute folder names
-          #   2. Append os.sep to all folders
-          #   3. Keep folders whose name starts with start_text
-          #   4. Add escaped folder name
-          search_folder.retrieve_children_info(only_folders=(cmd == "cd"))
-          # a=MsFolderInfo("k","l",mgc)
-          # a.retrieve_children_info(only_folders=False)
-          if cmd in ("get", "stat"):
-            all_children = search_folder.children_folder + search_folder.children_file
-          else:
-            all_children = search_folder.children_folder
-          folders = map(
-              lambda x: f"{x.name}{os.sep if isinstance(x, MsFolderInfo) else ''}",
-              all_children)
-          folders = filter(lambda x: x.startswith(start_text), folders)
-          folders = map(lambda x: StrPathUtil.escape_str(x), folders)
-          folders = map(lambda x: f"{self.new_start_line}{x}", folders)
-          self.values = list(folders)
-          self.__log_debug(f"values = {','.join(self.values)}")
-
-        if state < len(self.values):
-          self.__log_debug(f"  --> return {self.values[state]}")
-          return self.values[state]
-        else:
-          return None
-
-      return None
+      if state < len(self.values):
+        self.__log_debug(f"  --> return {self.values[state]}")
+        return self.values[state].candidate
+      else:
+        return None
 
     except Exception as e:
       print(f"[complete]Exception = {e}")
@@ -239,9 +399,14 @@ class OneDriveShell:
   class Command(ABC):
 
     @beartype
-    def __init__(self, name: str, my_argparser: argparse.ArgumentParser):
+    def __init__(
+            self,
+            name: str,
+            my_argparser: argparse.ArgumentParser,
+            sub_completer: SubCompleter):
       self.name = name
       self.argp = my_argparser
+      self.sub_completer = sub_completer
 
     @beartype
     @abstractmethod
@@ -260,20 +425,21 @@ class OneDriveShell:
     self.current_fi = self.root_folder
     self.only_folders = False
     self.ls_formatter = LsFormatter(MsFileFormatter(45), MsFolderFormatter(45))
+    self.cp = Completer(self)
     self.initiate_commands()
 
   def initiate_commands(self):
 
     # Methods to buil commands
-    def init_with_odshell(self2, name, my_argparser):
-      super(self2.__class__, self2).__init__(name, my_argparser)
+    def init_with_odshell(self2, name, my_argparser, sub_completer):
+      super(self2.__class__, self2).__init__(name, my_argparser, sub_completer)
 
-    def add_new_cmd(name, my_argparser, doa):
+    def add_new_cmd(name, my_argparser, doa, sub_completer):
       new_class = type(f"Class_{name}", (OneDriveShell.Command, ), {
           "__init__": init_with_odshell,
           "_do_action": doa
       })
-      self.__dict_cmds[name] = new_class(name, my_argparser)
+      self.dict_cmds[name] = new_class(name, my_argparser, sub_completer)
 
     # Actions of commands
 
@@ -356,18 +522,9 @@ class OneDriveShell:
     def action_pwd(self2, args):
       print(self.current_fi.path)
 
-    def action_l_pwd(self2, args):
-      print(os.getcwd())
-
     def action_l_cd(self2, args):
       os.chdir(args.path)
       print(os.getcwd())
-
-    def action_l_ls(self2, args):
-      os.system(shlex.join(['ls'] + args.options))
-
-    def action_do_test(self2, args):
-      lg.debug('This is action do_test')
 
     # Arguments management
     myparser = OneDriveShell.ArgumentParserWithoutExit(
@@ -414,35 +571,49 @@ class OneDriveShell:
     sp_stat = sub_parser.add_parser(
         'stat', description='Get info about object')
     sp_stat.add_argument('remotepath', type=str, help='destination object')
-
-    sp_l_pwd = sub_parser.add_parser('!pwd', description="Print local folder")
     sp_l_cd = sub_parser.add_parser('!cd', description="Change local folder")
     sp_l_cd.add_argument('path', type=str, help='Destination path')
-    sp_l_ls = sub_parser.add_parser('!ls', description="List local Folder")
-    sp_l_ls.add_argument(
-        'options',
-        nargs=argparse.REMAINDER,
-        help="All other options")
-    # Workaround to allow dash in options without consuming with argparse (*)
-    sp_l_ls._negative_number_matcher = re.compile('^-.+$')
 
     # (*) https://bugs.python.org/issue9334#msg169712
 
     self.__args_parser = myparser
 
     # Populate commands
-    self.__dict_cmds = {}
-    add_new_cmd('cd', sp_cd, action_cd)
-    add_new_cmd('ll', sp_ll, action_ll)
-    add_new_cmd('ls', sp_ls, action_ls)
-    add_new_cmd('lls', sp_lls, action_lls)
-    add_new_cmd('stat', sp_stat, action_stat)
-    add_new_cmd('get', sp_get, action_get)
-    add_new_cmd('mv', sp_mv, action_mv)
-    add_new_cmd('pwd', sp_pwd, action_pwd)
-    add_new_cmd('!pwd', sp_l_pwd, action_l_pwd)
-    add_new_cmd('!cd', sp_l_cd, action_l_cd)
-    add_new_cmd('!ls', sp_l_ls, action_l_ls)
+    self.dict_cmds = {}
+    add_new_cmd(
+        'cd',
+        sp_cd,
+        action_cd,
+        SubCompleterFileOrFolder(
+            self,
+            only_folder=True))
+    add_new_cmd('ll', sp_ll, action_ll, SubCompleterNone())
+    add_new_cmd('ls', sp_ls, action_ls, SubCompleterNone())
+    add_new_cmd('lls', sp_lls, action_lls, SubCompleterNone())
+    add_new_cmd(
+        'stat',
+        sp_stat,
+        action_stat,
+        SubCompleterFileOrFolder(
+            self,
+            only_folder=False))
+    add_new_cmd(
+        'get',
+        sp_get,
+        action_get,
+        SubCompleterFileOrFolder(
+            self,
+            only_folder=False))
+    add_new_cmd(
+        'mv',
+        sp_mv,
+        action_mv,
+        SubCompleterFileOrFolder(
+            self,
+            only_folder=False))
+    add_new_cmd('pwd', sp_pwd, action_pwd, SubCompleterNone())
+    # For any strange reason, cd does not work as common 'os.system'
+    add_new_cmd('!cd', sp_l_cd, action_l_cd, SubCompleterLocalCommand())
 
   def change_max_column_size(self, nb):
     self.ls_formatter = LsFormatter(MsFileFormatter(nb), MsFolderFormatter(nb))
@@ -461,12 +632,11 @@ class OneDriveShell:
     return result
 
   def launch(self):
-    cp = Completer(self)
 
     readline.parse_and_bind('tab: complete')
-    readline.set_completer(cp.complete)
+    readline.set_completer(self.cp.complete)
     if sys.platform != "win32":
-      readline.set_completion_display_matches_hook(cp.display_matches)
+      readline.set_completion_display_matches_hook(self.cp.display_matches)
     # All line content will be managed by complemtion
     readline.set_completer_delims("")
 
@@ -475,9 +645,9 @@ class OneDriveShell:
 
     while True:
 
-      my_input = input(f"{self.get_prompt()}")
+      my_raw_input = input(f"{self.get_prompt()}")
       # Trim my_input and remove double spaces
-      my_input = " ".join(my_input.split())
+      my_input = " ".join(my_raw_input.split())
       my_input = my_input.replace(" = ", "=")
       parts_cmd = shlex.split(my_input)
       if len(parts_cmd) > 0:
@@ -488,11 +658,14 @@ class OneDriveShell:
       if cmd in ("q", "quit", "exit"):
         break
 
-      if cmd in self.__dict_cmds:
+      if cmd == "":
+        pass
+
+      elif cmd in self.dict_cmds:
         args = []
         try:
           args = self.__args_parser.parse_args(parts_cmd)
-          self.__dict_cmds[cmd].do_action(args)
+          self.dict_cmds[cmd].do_action(args)
         except Exception as e:
           print(f"error: {e}")
 
@@ -503,6 +676,9 @@ class OneDriveShell:
           self.change_current_folder_to_parent()
         else:
           self.current_fi = self.current_fi.children_folder[int(my_input) - 1]
+
+      elif cmd[0] == "!":
+        os.system(my_raw_input[1:])
 
       elif cmd == "cd..":
         self.change_current_folder_to_parent()
@@ -528,7 +704,7 @@ class OneDriveShell:
       elif cmd == "help":
         if len(parts_cmd) == 1:
           print("Available commands")
-          for (k, v) in self.__dict_cmds.items():
+          for (k, v) in self.dict_cmds.items():
             print(f"    {k:14}{v.argp.description}")
 
           print(f"    {'<number>':14}Browse to folder <number>")
@@ -536,8 +712,8 @@ class OneDriveShell:
           print(f"    {'q/quit/exit':14}Quit the shell")
 
         elif len(parts_cmd) == 2:
-          if parts_cmd[1] in self.__dict_cmds:
-            self.__dict_cmds[parts_cmd[1]].argp.print_help()
+          if parts_cmd[1] in self.dict_cmds:
+            self.dict_cmds[parts_cmd[1]].argp.print_help()
           elif parts_cmd[1] == "set":
             print("usage:")
             print("   set ( (<variable>|no<variable) | ( <variable>=<value> )")
@@ -547,9 +723,6 @@ class OneDriveShell:
             print(
                 "    columnsize/cs       int           Column Size of folder names and files names")
             print("                                      for long listing")
-
-      elif cmd == "":
-        pass
 
       else:
         print("unknown command")
