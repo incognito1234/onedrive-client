@@ -6,11 +6,9 @@
   Onedrive Client Program
 """
 import logging
-
 from lib.auth_helper import get_sign_in_url, get_token_from_code, TokenRecorder
 from lib.graph_helper import MsGraphClient
 
-import pprint
 from lib.args_helper import parse_odc_args
 from lib.action_helper import (
     action_get_user,
@@ -26,23 +24,32 @@ from lib.file_config_helper import create_and_get_config_folder, force_permissio
 import os
 import sys
 
-# TODO Implement configure logger from file
+from os.path import exists
 
-if __name__ == '__main__':
 
-  args = parse_odc_args()
+def configure_logging(args):
 
-  # Configure Logger
-  FORMAT_LOG = "%(asctime)-15s %(name)s [%(levelname)s] %(message)s"
-  logging.basicConfig(format=FORMAT_LOG)
+  if exists("logging_config.py"):
+    import logging_config
+
+  else:
+    # Default config
+
+    FORMAT_LOG = "%(asctime)-15s %(name)s [%(levelname)s] %(message)s"
+    logging.basicConfig(format=FORMAT_LOG)
+
+    lg = logging.getLogger('odc')
+    # logging level are given here:
+    # https://docs.python.org/3.8/library/logging.html#levels
+    lg.setLevel(50 - (args.loglevel * 10))
+
+  # Config that can be forced with args
   lg_root = logging.getLogger()
   if not args.logstdout:
     if (len(lg_root.handlers) > 0):
       # Should be a StreamHandler that writes on std.err
       sh = lg_root.handlers[0]
       lg_root.removeHandler(sh)
-    else:
-      print("ERROR: No default logging hander has been detected")
 
   if args.forcenostderr:
     # By default, message error are logged on console if no handlers is configured.
@@ -54,14 +61,13 @@ if __name__ == '__main__':
     fh.setFormatter(logging.Formatter(FORMAT_LOG))
     lg_root.addHandler(fh)
 
-  lg = logging.getLogger('odc')
-  # logging level are given here:
-  # https://docs.python.org/3.8/library/logging.html#levels
-  lg.setLevel(50 - (args.loglevel * 10))
 
-  lg_odshell = logging.getLogger('odc.browser')
-  lg_odshell.setLevel(logging.ERROR)
-  lg_odshell.addHandler(logging.StreamHandler())
+if __name__ == '__main__':
+
+  args = parse_odc_args()
+
+  # Configure Logger
+  configure_logging(args)
 
   # Get authentication token
   config_dirname = create_and_get_config_folder()

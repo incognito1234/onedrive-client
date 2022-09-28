@@ -1,0 +1,57 @@
+from logging import config
+
+log_config = {
+    "version":1,
+    "root":{
+        "handlers" : ["console"],
+        "level": "ERROR"
+    },
+    "handlers":{
+        "console":{
+            "formatter": "std_out",
+            "class": "logging.StreamHandler",
+            "level": "ERROR"
+        },
+        "file":{
+            "formatter": "std_out",
+            "class": "logging.FileHandler",
+            "level": "DEBUG",
+            "filename": "file.log"
+        }
+    },
+    "loggers": {
+        "odc": {
+            "handlers": ["console"],
+            "level": "DEBUG",
+            "propagate": True
+        },
+        "odc.browser":{
+            "handlers": ["console"],
+            "level": "DEBUG",
+            "propagate": False
+        },
+        #"odc.browser.completer":{    },
+        #"odc.msobject":{  },
+        #"odc.msgraph":{  },
+        #"odc.config":{  },
+        #"odc.bulk": {  },
+        #"odc.action": {  },
+        #"odc.auth": {  },
+    },
+    "formatters":{
+        "std_out": {
+            "format": "%(asctime)-15s %(name)s [%(levelname)s] %(message)s"
+        }
+    },
+}
+
+config.dictConfig(log_config)
+
+if __name__ == '__main__':
+  import logging
+  lg = logging.getLogger("odc")
+  lg.debug("test debug")
+  lg.error("test error")
+
+  lg2 = logging.getLogger("odc.browser")
+  lg2.error("test error in file")

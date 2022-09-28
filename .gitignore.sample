@@ -1,4 +1,5 @@
 oauth_settings.yml
+logging_config.py
 .gitignore
 .token.json
 *.pyc
