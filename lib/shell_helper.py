@@ -516,11 +516,30 @@ class OneDriveShell:
 
       r = self.mgc.move_object(src_obj.path, dst_path2)
       if not r:
-        print(f"[Move]An error occured")
+        print(f"[Move]An error has occured")
         return False
       if is_a_renaming:
         src_obj.rename(new_name)
       src_obj.move_object(dst_parent)
+      return True
+
+    def action_rm(self2, args):
+      (lfip_dst, rt_dst) = MsObject.get_lastfolderinfo_path(
+          self.root_folder, args.dstpath, self.current_fi)
+      if lfip_dst.relative_path_is_a_file(rt_dst, True):
+        dst_obj = lfip_dst.get_child_file(rt_dst)
+      elif lfip_dst.relative_path_is_a_folder(rt_dst, True):
+        dst_obj = lfip_dst.get_child_folder(rt_dst)
+      else:
+        print(f"'{args.dstpath}' is not a path of a remote object")
+        return False
+      dst_path = os.path.normpath(f"{lfip_dst.path}/{rt_dst}")
+      r = self.mgc.delete_file(dst_path)
+      if r != 1:
+        print("[rm]An error has occured")
+        return False
+      dst_obj.update_parent_before_removal()
+      return True
 
     def action_pwd(self2, args):
       print(self.current_fi.path)
@@ -559,6 +578,12 @@ class OneDriveShell:
     sp_get = sub_parser.add_parser(
         'get', description='Download file in current folder')
     sp_get.add_argument('remotepath', type=str, help='remote file')
+    sp_rm = sub_parser.add_parser(
+        'rm', description='Remove a file or a folder')
+    sp_rm.add_argument(
+        'dstpath',
+        type=str,
+        help='File or Folder to be removed')
     sp_mv = sub_parser.add_parser(
         'mv', description='Move or rename a file or a folder')
     sp_mv.add_argument(
@@ -611,6 +636,13 @@ class OneDriveShell:
         'mv',
         sp_mv,
         action_mv,
+        SubCompleterFileOrFolder(
+            self,
+            only_folder=False))
+    add_new_cmd(
+        'rm',
+        sp_mv,
+        action_rm,
         SubCompleterFileOrFolder(
             self,
             only_folder=False))
@@ -704,15 +736,16 @@ class OneDriveShell:
           else:
             self.change_max_column_size(int_cs)
 
-      elif cmd == "help":
+      elif cmd == "help" or cmd == "h":
         if len(parts_cmd) == 1:
           print("Available commands")
           for (k, v) in self.dict_cmds.items():
-            print(f"    {k:14}{v.argp.description}")
+            print(f"  {k:20}{v.argp.description}")
 
-          print(f"    {'<number>':14}Browse to folder <number>")
-          print(f"    {'set':14}Set a variable")
-          print(f"    {'q/quit/exit':14}Quit the shell")
+          print(f"  {'<number>':20}Browse to folder <number>")
+          print(f"  {'!<shell_command>':20}Launch local shell command")
+          print(f"  {'set':20}Set a variable")
+          print(f"  {'q/quit/exit':20}Quit the shell")
 
         elif len(parts_cmd) == 2:
           if parts_cmd[1] in self.dict_cmds:
