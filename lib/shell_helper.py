@@ -105,13 +105,16 @@ class SubCompleter(ABC):
       self.candidate = candidate
       self.to_be_displayed = to_be_displayed
 
+    def __repr__(self):
+      return f"SCResult('{self.candidate}','{self.to_be_displayed}')"
+
   @beartype
   def __init__(self):
     pass
 
   @abstractmethod
   @beartype
-  def values(self, line: str) -> List[SCResult]:
+  def values(self, text: str) -> List[SCResult]:
     """  Compute candidates and displayed values regarding the line
 
     :param str line: List of candidates and displayed values
@@ -128,8 +131,8 @@ class SubCompleterFileOrFolder(SubCompleter):
     self.__only_folder = only_folder
 
   @beartype
-  def values(self, line: str) -> List[SubCompleter.SCResult]:
-    parts_cmd = CommonCompleter.get_cmd_parts_with_quotation_guess(line)
+  def values(self, text: str) -> List[SubCompleter.SCResult]:
+    parts_cmd = CommonCompleter.get_cmd_parts_with_quotation_guess(text)
 
     if len(parts_cmd) > 1:
       last_arg = parts_cmd[-1]
@@ -141,7 +144,7 @@ class SubCompleterFileOrFolder(SubCompleter):
       if lfip is None:  # Non existing folder
         return []
       start_text = rt
-      folder_names_str = lfip.path + os.sep
+      folder_names_str = lfip.path + '/'
       if was_relative_path and folder_names_str.startswith(
               self.ods.current_fi.path):
         folder_names_str = folder_names_str[(
@@ -155,16 +158,16 @@ class SubCompleterFileOrFolder(SubCompleter):
     # Extract start of last arguments to be escaped if necessary. Other
     # arguments won't be changed
     if len(parts_cmd) > 1:
-      raw_last_arg = CommonCompleter.extract_raw_last_args(line, parts_cmd[-1])
-      start_line = line[:-(len(raw_last_arg))]
+      raw_last_arg = CommonCompleter.extract_raw_last_args(text, parts_cmd[-1])
+      start_line = text[:-(len(raw_last_arg))]
     else:  # len(parts_cmd) == 1
-      start_line = line + " "
+      start_line = text.rstrip() + " "
 
     new_start_line = start_line + StrPathUtil.escape_str(folder_names_str)
 
     # Compute list of substitute string
     #   1. Compute folder names
-    #   2. Append os.sep to all folders
+    #   2. Append '/' to all folders
     #   3. Keep folders whose name starts with start_text
     #   4. Add escaped folder name
     search_folder.retrieve_children_info(only_folders=self.__only_folder)
@@ -173,7 +176,7 @@ class SubCompleterFileOrFolder(SubCompleter):
     else:
       all_children = search_folder.children_folder + search_folder.children_file
     folders = map(
-        lambda x: f"{x.name}{os.sep if isinstance(x, MsFolderInfo) else ''}",
+        lambda x: f"{x.name}{'/' if isinstance(x, MsFolderInfo) else ''}",
         all_children)
     folders = filter(lambda x: x.startswith(start_text), folders)
     folders = map(lambda x: StrPathUtil.escape_str(x), folders)
@@ -262,28 +265,28 @@ class SubCompleterLocalCommand(SubCompleter):
     # exact file match terminates this completion
     return [path + ' ']
 
-  def values(self, line: str) -> List[SubCompleter.SCResult]:
+  def values(self, text: str) -> List[SubCompleter.SCResult]:
     "Generic readline completion entry point."
 
     try:
       buffer = readline.get_line_buffer()
       buffer = buffer[1:]  # remove first '!'
-      line = buffer.split()
+      text = buffer.split()
       # account for last argument ending in a space
-      if line and SubCompleterLocalCommand.RE_SPACE.match(buffer):
-        line.append('')
+      if text and SubCompleterLocalCommand.RE_SPACE.match(buffer):
+        text.append('')
 
-      text = line[-1]
+      text = text[-1]
       # command completion
-      if len(line) < 2:
+      if len(text) < 2:
         self._generate(text)
         result = [c + ' ' for c in self.cmd_lookup.keys()]
         return list(map(lambda x: SubCompleter.SCResult(f"!{x}", x), result))
 
       else:
         # check if we should do path completion
-        start_line = ' '.join(line[:-1])
-        cmd = line[0]
+        start_line = ' '.join(text[:-1])
+        cmd = text[0]
         if not self.cmd_lookup:
           self._generate(cmd)
         if cmd not in self.cmd_lookup or not self.cmd_lookup[cmd]:
@@ -351,19 +354,19 @@ class Completer:
   def complete(self, text: str, state: int):
 
     self.__log_debug(f"complete('{text}',{state})")
-    line = readline.get_line_buffer()
+
     try:
 
       if state == 0:
-        parts_cmd = CommonCompleter.get_cmd_parts_with_quotation_guess(line)
+        parts_cmd = CommonCompleter.get_cmd_parts_with_quotation_guess(text)
 
         if len(parts_cmd) > 0 and (parts_cmd[0] in self.shell.dict_cmds):
           sub_completer = self.shell.dict_cmds[parts_cmd[0]].sub_completer
-          self.values = sub_completer.values(line)
+          self.values = sub_completer.values(text)
 
         elif len(parts_cmd) > 0 and parts_cmd[0][0] == "!":
           sub_completer = SubCompleterLocalCommand()
-          self.values = sub_completer.values(line)
+          self.values = sub_completer.values(text)
 
         else:
           self.values = []
@@ -769,8 +772,8 @@ class OneDriveShell:
        If str_path starts with a separator, path from root_path is computed.
        Else path from current_folder is considered
     """
-    if str_path[0] != os.sep:
-      result = os.path.normpath(self.current_fi.path + os.sep + str_path)[1:]
+    if str_path[0] != '/':
+      result = os.path.normpath(self.current_fi.path + '/' + str_path)[1:]
     else:
       result = os.path.normpath(str_path[1:])
     return result
