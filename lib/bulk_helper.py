@@ -132,7 +132,7 @@ def mupload_folder(
         depth: int = 999):
   lg.debug(
       '[mupload_folder]Starting. remote path = {0} - src path = {1} - depth = {2}'.format(
-          ms_folder.get_full_path(),
+          ms_folder.path,
           src_path,
           depth))
   ms_folder.retrieve_children_info(recursive=True, depth=depth)
@@ -147,8 +147,8 @@ def mupload_folder(
       else:
         if file_needs_upload(src_path, entry.name, ms_folder):
           lg.info("[mupload_folder]Upload file {0}".format(entry.path))
-          mgc.put_file_content(ms_folder.get_full_path(),
-                               "{0}/{1}".format(src_path, entry.name))
+          mgc.put_file_content(
+              ms_folder.path, "{0}/{1}".format(src_path, entry.name))
 
     elif entry.is_dir():
 
