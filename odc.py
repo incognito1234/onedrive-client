@@ -28,8 +28,9 @@ from os.path import exists
 
 
 def configure_logging(args):
-
-  if exists("logging_config.py"):
+  currentdir = os.path.dirname(os.path.realpath(__file__))
+  parentdir = os.path.dirname(currentdir)
+  if exists(f"{parentdir}{os.sep}logging_config.py"):
     import logging_config
 
   else:
