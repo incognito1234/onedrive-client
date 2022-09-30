@@ -16,7 +16,7 @@ def create_and_get_config_folder():
     home_folder = os.environ['APPDATA']
   else:
     home_folder = ''
-  param_folder = "{}/.odc/".format(home_folder)
+  param_folder = f"{home_folder}/.odc/"
 
   if not os.path.exists(param_folder):
     try:

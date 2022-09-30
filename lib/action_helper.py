@@ -17,11 +17,9 @@ lg = logging.getLogger('odc.action')
 def action_get_user(mgc):
   user = mgc.get_user()
   print(
-      "Display Name      = {0}\n"
-      "userPrincipalName = {1}".format(
-          user["displayName"],
-          user["userPrincipalName"]
-      ))
+      f"Display Name      = {user['displayName']}\n"
+      f"userPrincipalName = {user['userPrincipalName']}"
+  )
 
 
 @beartype
@@ -53,9 +51,8 @@ def action_mupload(
         mgc: MsGraphClient,
         src_local_path: str,
         dst_remote_folder: str):
-  lg.debug("action_mupload - folder = '{0}' to '{1}'".format(
-      src_local_path, dst_remote_folder
-  ))
+  lg.debug(
+      f"action_mupload - folder = '{src_local_path}' to '{dst_remote_folder}'")
   bulk_folder_upload(mgc, src_local_path, dst_remote_folder)
 
 
@@ -85,9 +82,8 @@ def action_mdownload(
         folder_path: str,
         dest_path: str,
         max_depth: int):
-  lg.debug("action_mdownload - folder = '{0}' - depth = '{1}'".format(
-      folder_path, max_depth
-  ))
+  lg.debug(
+      f"action_mdownload - folder = '{folder_path}' - depth = '{max_depth}'")
   bulk_folder_download(mgc, folder_path, dest_path, max_depth)
 
 

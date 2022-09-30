@@ -22,13 +22,11 @@ os.environ['OAUTHLIB_IGNORE_SCOPE_CHANGE'] = '1'
 
 # Load the oauth_settings.yml file
 current_dirname = os.path.dirname(os.path.realpath(__file__))
-stream = open("{0}/../oauth_settings.yml".format(current_dirname), 'r')
+stream = open(f"{current_dirname}/../oauth_settings.yml", 'r')
 settings = yaml.load(stream, yaml.SafeLoader)
 stream.close()
-authorize_url = '{0}{1}'.format(
-    settings['authority'],
-    settings['authorize_endpoint'])
-token_url = '{0}{1}'.format(settings['authority'], settings['token_endpoint'])
+authorize_url = f"{settings['authority']}{settings['authorize_endpoint']}"
+token_url = f"{settings['authority']}{settings['token_endpoint']}"
 
 # Method to generate a sign-in url
 
@@ -96,8 +94,7 @@ class TokenRecorder:
         self.token = data
         result = 1
     except Exception as err:
-      lg.error(
-          "Error during loading of file {0} - {1}".format(self.filename, err))
+      lg.warn(f"Error during file loading {self.filename} - {err}")
       result = 0
 
     return result

@@ -26,7 +26,7 @@ class MsGraphClient:
 
   def get_user(self):
     # Send GET to /me
-    user = self.mgc.get('{0}/me'.format(MsGraphClient.graph_url))
+    user = self.mgc.get(f"{MsGraphClient.graph_url}/me")
     # Return the JSON result
     return user.json()
 
@@ -40,7 +40,8 @@ class MsGraphClient:
 
     # Send GET to /me/events
     events = self.mgc.get(
-        '{0}/me/events'.format(MsGraphClient.graph_url), params=query_params)
+        f"{MsGraphClient.graph_url}/me/events",
+        params=query_params)
     # Return the JSON result
     return events.json()
 
@@ -51,10 +52,9 @@ class MsGraphClient:
 
     # folder_path must start with '/'
     if folder_path == '':
-      fp = '{0}/me/drive/root/children'.format(MsGraphClient.graph_url)
+      fp = f"{MsGraphClient.graph_url}/me/drive/root/children"
     else:
-      fp = '{0}/me/drive/root:{1}:/children'.format(
-          MsGraphClient.graph_url, folder_path)
+      fp = f"{MsGraphClient.graph_url}/me/drive/root:{folder_path}:/children"
     return self.get_ms_response_for_children_folder_path_from_link(
         fp, only_folder)
 
@@ -86,13 +86,13 @@ class MsGraphClient:
   def download_file_content(self, dst_path, local_dst):
     # Inspired from https://gist.github.com/mvpotter/9088499
 
-    r = self.mgc.get('{0}/me/drive/root:/{1}:/content'.format(
-        MsGraphClient.graph_url, dst_path
-    ), stream=True)
+    r = self.mgc.get(
+        f"{MsGraphClient.graph_url}/me/drive/root:/{dst_path}:/content",
+        stream=True)
 
     if os.path.isdir(local_dst):
       file_name = dst_path.split("/").pop()
-      local_filepath = "{0}/{1}".format(local_dst, file_name)
+      local_filepath = f"{local_dst}/{file_name}"
     else:
       local_filepath = local_dst
 
@@ -102,21 +102,19 @@ class MsGraphClient:
       for chunk in r.iter_content(chunk_size=CHUNK_SIZE):
         if chunk:  # filter out keep-alive new chunks
           lg.info(
-              "[download_file_content] Downloading {0} from {1}".format(
-                  dst_path, start))
+              f"[download_file_content] Downloading {dst_path} from {start}")
           f.write(chunk)
           f.flush()
           start = start + CHUNK_SIZE
     lg.info(
-        "[download_file_content] Download of file '{0}' to '{1}' - OK".format(dst_path, local_dst))
+        f"[download_file_content] Download of file '{dst_path }' to '{local_dst}' - OK")
 
     return 1
 
   def delete_file(self, file_path):
     file_path = StrPathUtil.add_first_char_if_necessary(file_path, "/")
-    r = self.mgc.delete('{0}/me/drive/root:{1}:'.format(
-        MsGraphClient.graph_url, file_path
-    ))
+    r = self.mgc.delete(
+        f"{MsGraphClient.graph_url}/me/drive/root:{file_path}:")
     if r.status_code == 404:
       return 0      # File not found
     elif r.status_code == 204:
@@ -125,17 +123,15 @@ class MsGraphClient:
       return 2      # ??
 
   def raw_command(self, cmd):
-    result = self.mgc.get("{0}{1}".format(
-        MsGraphClient.graph_url, cmd
-    ))
+    result = self.mgc.get(f"{MsGraphClient.graph_url}{cmd}")
     return result
 
   def put_file_content(self, dst_folder, src_file):
-    lg.info("Start put_file_content('{0}','{1}')".format(dst_folder, src_file))
+    lg.info(f"Start put_file_content('{dst_folder}','{src_file}')")
 
     dst_folder = StrPathUtil.remove_first_char_if_necessary(dst_folder, "/")
     total_size = os.path.getsize(src_file)
-    lg.debug("File size = {0}".format(total_size))
+    lg.debug(f"File size = {total_size}")
     file_name = src_file.split("/").pop()
     # For file size < 4Mb
     if total_size < (1048576 * 4):
@@ -148,7 +144,7 @@ class MsGraphClient:
           # 'Content-Type' : 'text/plain'
           'Content-Type': 'application/octet-stream'
       }
-      lg.debug("url put file = {}".format(url))
+      lg.debug(f"url put file = {url}")
       with open(src_file, 'rb') as f:
         r = self.mgc.put(
             url,
@@ -160,11 +156,7 @@ class MsGraphClient:
     else:
       # For file size > 4 Mb
       # https://docs.microsoft.com/fr-fr/graph/api/driveitem-createuploadsession?view=graph-rest-1.0
-      url = '{0}/me/drive/root:/{1}/{2}:/createUploadSession'.format(
-          MsGraphClient.graph_url,
-          dst_folder,
-          file_name
-      )
+      url = f"{MsGraphClient.graph_url}/me/drive/root:/{dst_folder}/{file_name}:/createUploadSession"
       data = {
           "item": {
               "@odata.type": "microsoft.graph.driveItemUploadableProperties",
@@ -186,7 +178,7 @@ class MsGraphClient:
 
       # Upload parts of file
       total_size = os.path.getsize(src_file)
-      lg.debug("total_size = {0:,}".format(total_size))
+      lg.debug(f"total_size = {total_size:,}")
 
       CHUNK_SIZE = 1048576 * 20  # 20 MB
       current_start = 0
@@ -229,9 +221,8 @@ class MsGraphClient:
           i = i + 1
 
           headers = {
-              'Content-Length': "{0}".format(current_size),
-              'Content-Range': "bytes {0}-{1}/{2}".format(current_start, current_end, total_size)
-          }
+              'Content-Length': str(current_size),
+              'Content-Range': f"bytes {current_start}-{current_end}/{total_size}"}
 
           #simu_error = i==5
           if not simu_error:
@@ -246,9 +237,7 @@ class MsGraphClient:
 
             r = self.mgc.get(uurl)
             lg.debug(
-                "Error with retry. Status of upload URL: {0}".format(
-                    pprint.pformat(
-                        r.json())))
+                f"Error with retry. Status of upload URL: {pprint.pformat(r.json())}")
 
             if not retry_status.max_retry_reach():
               retry_status.increase_retry()
@@ -258,7 +247,7 @@ class MsGraphClient:
                       current_start,
                       current_end,
                       status_code_put))
-              lg.info("Wait {0} seconds".format(retry_status.delay_wait()))
+              lg.info(f"Wait {retry_status.delay_wait()} seconds")
               ner = r.json()['nextExpectedRanges'][0]
               current_start = int(ner[:ner.find('-')])
               if total_size >= current_start + CHUNK_SIZE:
@@ -305,14 +294,14 @@ class MsGraphClient:
       if "id" not in rjson:
         lg.error("Error during uploading")
       else:
-        lg.info("Correctly uploaded - id = {0}".format(rjson["id"]))
+        lg.info(f"Correctly uploaded - id = {rjson['id']}")
         r = self.mgc.get(uurl)
-        lg.debug("Status of upload URL: {0}".format(pprint.pformat(r.json())))
+        lg.debug(f"Status of upload URL: {pprint.pformat(r.json())}")
 
       # Close URL
       self.cancel_upload(uurl)
 
-      lg.info("Session is finish - Stop_reason = {0}".format(stop_reason))
+      lg.info(f"Session is finish - Stop_reason = {stop_reason}")
       r = r1
       return r
 
@@ -328,10 +317,9 @@ class MsGraphClient:
     """
     dst_path = StrPathUtil.remove_first_char_if_necessary(dst_path, "/")
     if dst_path == '':
-      dst_url = '{0}/me/drive/root:/children'.format(MsGraphClient.graph_url)
+      dst_url = f"{MsGraphClient.graph_url}/me/drive/root:/children"
     else:
-      dst_url = '{0}/me/drive/root:/{1}:/children'.format(
-          MsGraphClient.graph_url, dst_path)
+      dst_url = f"{MsGraphClient.graph_url}/me/drive/root:/{dst_path}:/children"
 
     data = {'name': new_folder, 'folder': {},
             '@microsoft.graph.conflictBehavior': 'rename'}
@@ -358,9 +346,8 @@ class MsGraphClient:
     """
     path = StrPathUtil.remove_first_char_if_necessary(path, "/")
     prefixed_path = "" if path == "" else f":/{path}"  # Consider root
-    r = self.mgc.get('{0}/me/drive/root{1}'.format(
-        MsGraphClient.graph_url, prefixed_path
-    )).json()
+    r = self.mgc.get(
+        f"{MsGraphClient.graph_url}/me/drive/root{prefixed_path}").json()
     if 'error' in r:
       return MsGraphClient.TYPE_NONE
 
@@ -373,9 +360,8 @@ class MsGraphClient:
     object_path = StrPathUtil.remove_first_char_if_necessary(object_path, "/")
 
     prefixed_path = "" if object_path == "" else f":/{object_path}"
-    r = self.mgc.get('{0}/me/drive/root{1}'.format(
-        MsGraphClient.graph_url, prefixed_path
-    )).json()
+    r = self.mgc.get(
+        f"{MsGraphClient.graph_url}/me/drive/root{prefixed_path}").json()
     if 'error' in r:
       return None
     else:
@@ -387,8 +373,7 @@ class MsGraphClient:
     src_path = StrPathUtil.remove_first_char_if_necessary(src_path, '/')
     dst_path = StrPathUtil.remove_first_char_if_necessary(dst_path, '/')
 
-    src_url = '{0}/me/drive/root:/{1}'.format(
-        MsGraphClient.graph_url, src_path)
+    src_url = f'{MsGraphClient.graph_url}/me/drive/root:/{src_path}'
 
     type_dst = self.path_type(dst_path)
 

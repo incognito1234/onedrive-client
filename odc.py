@@ -75,13 +75,13 @@ if __name__ == '__main__':
   if config_dirname is None:
     exit(0)
 
-  token_file_name = "{0}/.token.json".format(config_dirname)
+  token_file_name = f"{config_dirname}/.token.json"
   force_permission_file_read_write_owner(token_file_name)
   tr = TokenRecorder(token_file_name)
 
   if args.command == 'init':
     sign_in_url, state = get_sign_in_url()
-    print("url = {}".format(sign_in_url))
+    print(f"url = {sign_in_url}")
     url = input("url callback: ")
     token = get_token_from_code(url, state)
     tr.store_token(token)
@@ -90,7 +90,7 @@ if __name__ == '__main__':
     tr.init_token_from_file()
 
   if not tr.token_exists():
-    print("please connect first with {} init".format(sys.argv[0]))
+    print(f"please connect first with {sys.argv[0]} init")
     quit()
 
   # Manage command

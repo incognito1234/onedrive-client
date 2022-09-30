@@ -290,7 +290,7 @@ class MsFolderInfo(MsObject):
     if folder_json:
       new_folder_info = MsFolderInfo(
           folder_name,
-          "{0}/{1}".format(self.path, folder_name),
+          f"{self.path}/{folder_name}",
           self.__mgc,
           id=folder_json["id"],
           size=0,
@@ -474,25 +474,16 @@ class MsFileInfo(MsObject):
 
   def str_full_details(self):
     result = (
-        "File - '{0}'\n"
-        "  name                  = {1}\n"
-        "  full_path             = {2}\n"
-        "  id                    = {3:>20}\n"
-        "  size                  = {4:,}\n"
-        "  quickXorHash          = {5}\n"
-        "  sha1Hash              = {6}\n"
-        "  creationDateTime      = {7}\n"
-        "  lastModifiedDateTime  = {8}"
-    ).format(
-        self.name,
-        self.name,
-        self.path,
-        self.ms_id,
-        self.size,
-        self.qxh,
-        self.sha1hash,
-        self.creation_datetime,
-        self.last_modified_datetime)
+        f"File - '{self.name}'\n"
+        "  name                  = {self.name}\n"
+        "  full_path             = {self.path}\n"
+        "  id                    = {self.ms_id:>20}\n"
+        "  size                  = {self.size:,}\n"
+        "  quickXorHash          = {self.qxh}\n"
+        "  sha1Hash              = {self.sha1hash}\n"
+        "  creationDateTime      = {self.creation_datetime}\n"
+        "  lastModifiedDateTime  = {self.last_modified_datetime}"
+    )
 
     return result
 
@@ -518,9 +509,8 @@ class ObjectInfoFactory:
       path = path[1:]
     # Consider root
     prefixed_path = "" if path == "/" or path == "" else f":/{path}"
-    r = mgc.mgc.get('{0}/me/drive/root{1}'.format(
-        MsGraphClient.graph_url, prefixed_path
-    )).json()
+    r = mgc.mgc.get(
+        f'{MsGraphClient.graph_url}/me/drive/root{prefixed_path}').json()
     if 'error' in r:
       return (r['error']['code'], None)
 
