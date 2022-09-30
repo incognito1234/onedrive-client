@@ -63,6 +63,11 @@ def parse_odc_args():
 
   parser_upload = sub_parsers.add_parser(
       'put', aliases=['upload'], help='upload a file')
+  parser_upload.add_argument(
+      '--withprogressbar',
+      help='add a progress bar',
+      action="store_true",
+      default=False)
   parser_upload.add_argument('srcfile', type=str, help='source file')
   parser_upload.add_argument('dstpath', type=str, help='destination path')
   parser_upload.set_defaults(command="put")

@@ -104,7 +104,7 @@ if __name__ == '__main__':
     action_get_children(mgc, args.folder, args.p)
 
   if args.command == "put":
-    action_upload(mgc, args.dstpath, args.srcfile)
+    action_upload(mgc, args.dstpath, args.srcfile, args.withprogressbar)
 
   if args.command == "mput":
     action_mupload(mgc, args.srclocalpath, args.dstremotefolder)

@@ -10,6 +10,11 @@ import os
 import pprint
 import time
 
+try:
+  from tqdm import tqdm
+except Exception:
+  tqdm = None
+
 lg = logging.getLogger("odc.msgraph")
 
 
@@ -126,7 +131,7 @@ class MsGraphClient:
     result = self.mgc.get(f"{MsGraphClient.graph_url}{cmd}")
     return result
 
-  def put_file_content(self, dst_folder, src_file):
+  def put_file_content(self, dst_folder, src_file, with_progress_bar=True):
     lg.info(f"Start put_file_content('{dst_folder}','{src_file}')")
 
     dst_folder = StrPathUtil.remove_first_char_if_necessary(dst_folder, "/")
@@ -179,6 +184,17 @@ class MsGraphClient:
       # Upload parts of file
       total_size = os.path.getsize(src_file)
       lg.debug(f"total_size = {total_size:,}")
+
+      # Init Progress bar
+      if tqdm is not None and with_progress_bar:
+        pbar = tqdm(
+            desc=f"Uploading {file_name}",
+            total=total_size,
+            unit="B",
+            unit_scale=True,
+            unit_divisor=1024)
+      else:
+        pbar = None
 
       CHUNK_SIZE = 1048576 * 20  # 20 MB
       current_start = 0
@@ -280,6 +296,8 @@ class MsGraphClient:
             # ))
 
           else:  # status_code_put in (202, 201, 200)
+            if pbar is not None:
+              pbar.update(current_size)
             current_start = current_end + 1
             if total_size >= current_start + CHUNK_SIZE:
               current_end = current_start + CHUNK_SIZE - 1
