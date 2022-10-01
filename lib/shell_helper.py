@@ -20,8 +20,7 @@ import shlex
 import pydoc
 from abc import ABC, abstractmethod
 import re
-from typing import List, Optional
-
+from lib._typing import List, Optional
 from beartype import beartype
 
 from lib.graph_helper import MsGraphClient

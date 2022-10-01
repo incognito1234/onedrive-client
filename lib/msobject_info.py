@@ -7,7 +7,7 @@ import os
 import sys
 from abc import ABC, abstractmethod
 from beartype import beartype
-from typing import Optional, Tuple
+from lib._typing import Optional, Tuple
 from lib.graph_helper import MsGraphClient
 from lib.datetime_helper import str_from_ms_datetime
 from lib.strpathutil import StrPathUtil
