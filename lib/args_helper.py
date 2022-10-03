@@ -139,6 +139,11 @@ def parse_odc_args():
       help='destination object')
   parser_get_info.set_defaults(command="stat")
 
+  parser_share = sub_parsers.add_parser(
+      'share', help='share a file or a folder')
+  parser_share.add_argument('path', type=str, help='path to be shared')
+  parser_share.set_defaults(command="share")
+
   parser_move = sub_parsers.add_parser(
       'mv', aliases=['move'], help='move a file or a folder')
   parser_move.add_argument('srcpath', type=str, help='source path')

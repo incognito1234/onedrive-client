@@ -2,6 +2,7 @@
 #  This file is part of OneDrive Client Program which is released under MIT License
 #  See file LICENSE for full license details
 import logging
+import getpass
 
 from lib.check_helper import quickxorhash
 from lib.shell_helper import OneDriveShell, LsFormatter, MsFolderFormatter, MsFileFormatter
@@ -110,6 +111,22 @@ def action_get_info(mgc: MsGraphClient, remote_path: str):
     print("Object not found")
   else:
     print(r[1].str_full_details())
+
+
+@beartype
+def action_share(mgc: MsGraphClient, path: str):
+  pwd = None
+  try:
+    pwd = getpass.getpass("Password :")
+  except Exception as error:
+    print('ERROR while reading password', error)
+  if pwd is None:
+    return
+  r = mgc.create_share_link(path, "view", pwd)
+  if r is not None:
+    print(f"'{path}' is accessible here possibly with a new password: {r}")
+  else:
+    print("Error during creation of link")
 
 
 @beartype

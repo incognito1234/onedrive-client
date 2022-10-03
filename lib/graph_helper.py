@@ -429,6 +429,35 @@ class MsGraphClient:
       lg.error(f"[move]Error during move: {r.reason}")
       return False
 
+  def create_share_link(self, path: str, share_type: str, password: str):
+    share_path = StrPathUtil.remove_first_char_if_necessary(path, '/')
+
+    itemId = self.get_id(share_path)
+    if itemId is None:
+      lg.error(f"[create_share_link]'{path}' does not exist")
+      return None
+    url = f"{MsGraphClient.graph_url}/me/drive/items/{itemId}/createLink"
+    lg.debug(f"url = {url}")
+    headers = {'Content-Type': 'application/json'}
+    data = json.dumps({
+        "type": share_type,
+        "password": password,
+        "scope": "anonymous"
+    })
+    r = self.mgc.post(url, headers=headers, data=data)
+    if r.status_code in (
+            200, 201):  # 200 = Already Exists - 201 = Just created
+      r_json = r.json()
+      if "link" in r_json and "webUrl" in r_json["link"]:
+        return r_json["link"]["webUrl"]
+      else:
+        lg.error(
+            f"[create_share_link]Error during link creation to '{path}' - webUrl not present in response")
+    else:
+      lg.error(
+          f"[create_share_link]Error during link creation to '{path}' '{type}' - {r.reason}")
+      return None
+
   def close(self):
     self.mgc.close()
 

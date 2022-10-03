@@ -16,7 +16,7 @@ from lib.action_helper import (
     action_upload, action_mupload,
     action_raw_cmd,
     action_download, action_mdownload,
-    action_get_info,
+    action_get_info, action_share,
     action_browse, action_qxh, action_move, action_remove,
     action_mkdir
 )
@@ -129,6 +129,9 @@ if __name__ == '__main__':
 
   if args.command == "stat":
     action_get_info(mgc, args.dstremotepath)
+
+  if args.command == "share":
+    action_share(mgc, args.path)
 
   if args.command == "mkdir":
     action_mkdir(mgc, args.remotefolder)
