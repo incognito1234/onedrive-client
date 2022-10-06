@@ -6,8 +6,9 @@ import sys
 
 
 class StrPathUtil:
-  __TO_BE_ESCAPED = ('\\', ' ', '\'') if sys.platform != "win32" else (
-      ' ')  # \\ MUST be the first one
+  __TO_BE_ESCAPED = (
+      '\\', ' ', '\'', '(', ')') if sys.platform != "win32" else (
+      ' ', '(', ')')  # \\ MUST be the first one
 
   @staticmethod
   def escape_str(what):

@@ -86,7 +86,8 @@ class CommonCompleter:
 
       i = i - 1
 
-   # self.__log_debug(f'extract_raw_last_args("{input}","{parsed_last_arg}") not found')
+   # self.__log_debug(f'extract_raw_last_args("{input}","{parsed_last_arg}")
+   # not found')
     return None
 
 
@@ -217,7 +218,7 @@ class SubCompleterLocalCommand(SubCompleter):
   def _generate(self, prefix):
     def begins_with(s): return s[:len(prefix)] == prefix
     self.cmd_lookup = {}
-    #lg.debug("Entering generate")
+    # lg.debug("Entering generate")
 
     # append commands in PATH
     for path in map(os.path.expanduser, os.environ.get('PATH', '').split(':')):
@@ -290,6 +291,7 @@ class SubCompleterLocalCommand(SubCompleter):
         if cmd not in self.cmd_lookup or not self.cmd_lookup[cmd]:
           return []
         result = self._complete_path(os.path.expanduser(last_arg))
+        result = map(lambda x: StrPathUtil.escape_str(x), result)
         return list(
             map(
                 lambda x: SubCompleter.SCResult(
@@ -553,7 +555,7 @@ class OneDriveShell:
     myparser = OneDriveShell.ArgumentParserWithoutExit(
         prog='Onedrive Shell', usage='')
 
-    #myparser.add_argument('num', type=int, help='num', nargs='?',default=None)
+    # myparser.add_argument('num', type=int, help='num', nargs='?',default=None)
     sub_parser = myparser.add_subparsers(dest='cmd')
     sp_cd = sub_parser.add_parser('cd', help='Change directory')
     sp_cd.add_argument('path', type=str, help='Destination path')
