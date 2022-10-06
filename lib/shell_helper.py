@@ -268,29 +268,28 @@ class SubCompleterLocalCommand(SubCompleter):
     "Generic readline completion entry point."
 
     try:
-      buffer = readline.get_line_buffer()
-      buffer = buffer[1:]  # remove first '!'
-      text = buffer.split()
+      buffer = text[1:]  # remove first '!'
+      text_part = buffer.split()
       # account for last argument ending in a space
-      if text and SubCompleterLocalCommand.RE_SPACE.match(buffer):
-        text.append('')
+      if text_part and SubCompleterLocalCommand.RE_SPACE.match(buffer):
+        text_part.append('')
 
-      text = text[-1]
+      last_arg = text_part[-1]
       # command completion
-      if len(text) < 2:
-        self._generate(text)
+      if len(text_part) < 2:
+        self._generate(last_arg)
         result = [c + ' ' for c in self.cmd_lookup.keys()]
         return list(map(lambda x: SubCompleter.SCResult(f"!{x}", x), result))
 
       else:
         # check if we should do path completion
-        start_line = ' '.join(text[:-1])
-        cmd = text[0]
+        start_line = ' '.join(text_part[:-1])
+        cmd = text_part[0]
         if not self.cmd_lookup:
           self._generate(cmd)
         if cmd not in self.cmd_lookup or not self.cmd_lookup[cmd]:
           return []
-        result = self._complete_path(os.path.expanduser(text))
+        result = self._complete_path(os.path.expanduser(last_arg))
         return list(
             map(
                 lambda x: SubCompleter.SCResult(
