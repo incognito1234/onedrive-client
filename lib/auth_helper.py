@@ -8,12 +8,14 @@ from requests_oauthlib import OAuth2Session
 import os
 import time
 import json
+import msal
+import urllib.parse
 
 lg = logging.getLogger('odc.auth')
 
 # This is necessary for testing with non-HTTPS localhost
 # Remove this if deploying to production
-os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
+# os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
 
 # This is necessary because Azure does not guarantee
 # to return scopes in the same case and order as requested
@@ -27,36 +29,10 @@ settings = yaml.load(stream, yaml.SafeLoader)
 stream.close()
 authorize_url = f"{settings['authority']}{settings['authorize_endpoint']}"
 token_url = f"{settings['authority']}{settings['token_endpoint']}"
+redirect_url = settings['redirect']
+scopes_app = settings['scopes'].split()
 
 # Method to generate a sign-in url
-
-
-def get_sign_in_url():
-  # Initialize the OAuth client
-  aad_auth = OAuth2Session(settings['app_id'],
-                           scope=settings['scopes'],
-                           redirect_uri=settings['redirect'])
-
-  sign_in_url, state = aad_auth.authorization_url(
-      authorize_url, prompt='login')
-
-  return sign_in_url, state
-
-# Method to exchange auth code for access token
-
-
-def get_token_from_code(callback_url, expected_state):
-  # Initialize the OAuth client
-  aad_auth = OAuth2Session(settings['app_id'],
-                           state=expected_state,
-                           scope=settings['scopes'],
-                           redirect_uri=settings['redirect'])
-
-  token = aad_auth.fetch_token(token_url,
-                               client_secret=settings['app_secret'],
-                               authorization_response=callback_url)
-
-  return token
 
 
 class TokenRecorder:
@@ -67,69 +43,70 @@ class TokenRecorder:
   def __init__(self, filename):
     self.filename = filename
     self.token = None
+    self.__cache = None
 
-  def store_token(self, token):
-    """
-        Record token
-    """
-    with open(self.filename, 'w') as tokenfile:
-      json.dump(token, tokenfile)
-      self.token = token
-    return 1
+  def get_token_interactivaly(self, prefix_url, prompt_url_callback):
+    # Initialize the OAuth client
+    self.__cache = msal.SerializableTokenCache()
+    app = msal.ConfidentialClientApplication(
+        settings['app_id'],
+        authority=settings['authority'],
+        client_credential=settings['app_secret'],
+        token_cache=self.__cache)
+
+    dict_auth = app.initiate_auth_code_flow(
+        scopes=scopes_app, redirect_uri=redirect_url)
+    print(f"{prefix_url}{dict_auth['auth_uri']}")
+    resp = input(prompt_url_callback)
+
+    try:
+      if len(resp) > len(redirect_url):
+        resp = resp[(len(redirect_url) + 1):]  # +1 to consume the char "?"
+      print(f"resp={resp}")
+      dict_resp = urllib.parse.parse_qs(resp)
+    except Exception as e:
+      lg.error(f"Error during parsing of callback url - {e}")
+      return False
+    for key_dict in dict_resp:
+      dict_resp[key_dict] = dict_resp[key_dict][0]
+
+    result = app.acquire_token_by_auth_code_flow(
+        auth_code_flow=dict_auth, auth_response=dict_resp)
+
+    return "access_token" in result
+
+  def store_token(self):
+    if self.__cache is not None and self.__cache.has_state_changed:
+      lg.debug(f"[store_token]Store in file {self.filename}")
+      open(self.filename, 'w').write(self.__cache.serialize())
+    else:
+      lg.error("[store_token]No need to store token")
 
   def __refresh_token(self, token):
-    """
-      Method called automatically by OAuth2Session when token is refreshed
-    """
-    lg.info("Refresh token")
-    self.store_token(token)
+    lg.debug("Refresh token")
+    self.init_token_from_file()
+    self.store_token()
 
   def token_exists(self):
     return self.token is not None
 
   def init_token_from_file(self):
+    lg.debug("Init token from file")
     try:
-      with open(self.filename, 'r') as tokenfile:
-        data = json.load(tokenfile)
-        self.token = data
-        result = 1
+      self.__cache = msal.SerializableTokenCache()
+      if os.path.exists(self.filename):
+        self.__cache.deserialize(open(self.filename, "r").read())
+      app = msal.ConfidentialClientApplication(
+          settings['app_id'],
+          authority=settings['authority'],
+          client_credential=settings['app_secret'],
+          token_cache=self.__cache)
+      accounts = app.get_accounts()
+      chosen = accounts[0]
+      self.token = app.acquire_token_silent(scopes_app, account=chosen)
+
     except Exception as err:
       lg.warn(f"Error during file loading {self.filename} - {err}")
-      result = 0
-
-    return result
-
-  def get_token(self):
-    if self.token is not None:
-      # Check expiration
-      now = time.time()
-      # Subtract 5 minutes from expiration to account for clock skew
-      expire_time = self.token['expires_at'] - 300
-      if now >= expire_time:
-        # Refresh the token
-        aad_auth = OAuth2Session(settings['app_id'],
-                                 token=self.token,
-                                 scope=settings['scopes'],
-                                 redirect_uri=settings['redirect'])
-
-        refresh_params = {
-            'client_id': settings['app_id'],
-            'client_secret': settings['app_secret'],
-        }
-        new_token = aad_auth.refresh_token(token_url, **refresh_params)
-
-        # Save new token
-        self.store_token(new_token)
-
-        # Return new access token (that has just been stored)
-        return self.token
-
-      else:
-        # Token still valid, just return it
-        return self.token
-
-    else:
-      return None
 
   def get_session_from_token(self):
     lg.debug("Get session from token starting")
@@ -137,11 +114,12 @@ class TokenRecorder:
         'client_id': settings['app_id'],
         'client_secret': settings['app_secret'],
     }
-    client = OAuth2Session(settings['app_id'],
-                           token=self.token,
-                           scope=settings['scopes'],
-                           redirect_uri=settings['redirect'],
-                           auto_refresh_url=token_url,
-                           auto_refresh_kwargs=refresh_params,
-                           token_updater=self.__refresh_token)
+    client = OAuth2Session(
+        settings['app_id'],
+        token=self.token,
+        scope=settings['scopes'],
+        redirect_uri=settings['redirect'],
+        auto_refresh_url=token_url,
+        auto_refresh_kwargs=refresh_params,
+        token_updater=self.__refresh_token)
     return client

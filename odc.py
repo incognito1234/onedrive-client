@@ -6,7 +6,7 @@
   Onedrive Client Program
 """
 import logging
-from lib.auth_helper import get_sign_in_url, get_token_from_code, TokenRecorder
+from lib.auth_helper import TokenRecorder
 from lib.graph_helper import MsGraphClient
 
 from lib.args_helper import parse_odc_args
@@ -80,14 +80,18 @@ if __name__ == '__main__':
   tr = TokenRecorder(token_file_name)
 
   if args.command == 'init':
-    sign_in_url, state = get_sign_in_url()
-    print(f"url = {sign_in_url}")
-    url = input("url callback: ")
-    token = get_token_from_code(url, state)
-    tr.store_token(token)
+
+    token_ok = tr.get_token_interactivaly(
+        "Enter the following URL in a browser and connect to your MS Account:\n\n",
+        "\nAn error page should be displayed. \nCopy/Paste here the url which appears in the address bar: \n")
+    if token_ok:
+      tr.store_token()
+    else:
+      print("error during initialization of token")
     quit()
   else:
     tr.init_token_from_file()
+    tr.store_token()
 
   if not tr.token_exists():
     print(f"please connect first with {sys.argv[0]} init")
