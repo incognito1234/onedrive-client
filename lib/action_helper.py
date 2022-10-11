@@ -29,7 +29,8 @@ def action_get_children(
         folder: str,
         with_pagination: bool):
   # TODO Make column sizes adaptative
-  folder_info = ObjectInfoFactory.get_object_info(mgc, folder)[1]
+  folder_info = ObjectInfoFactory.get_object_info(
+      mgc, folder, no_warn_if_no_parent=True)[1]
   folder_info.retrieve_children_info(recursive=False, depth=0)
   ls_formatter = LsFormatter(MsFileFormatter(60), MsFolderFormatter(60), False)
   ls_formatter.print_folder_children(
@@ -106,7 +107,8 @@ def action_remove(mgc: MsGraphClient, file_path: str):
 
 @beartype
 def action_get_info(mgc: MsGraphClient, remote_path: str):
-  r = ObjectInfoFactory.get_object_info(mgc, remote_path, no_warn_if_no_parent=True)
+  r = ObjectInfoFactory.get_object_info(
+      mgc, remote_path, no_warn_if_no_parent=True)
   if r[0] is not None:
     print("Object not found")
   else:
