@@ -132,7 +132,7 @@ def action_share(mgc: MsGraphClient, path: str):
 
 
 @beartype
-def action_browse(mgc: MsGraphClient):
+def action_shell(mgc: MsGraphClient):
   od_shell = OneDriveShell(mgc)
   od_shell.launch()
 

@@ -17,7 +17,7 @@ from lib.action_helper import (
     action_raw_cmd,
     action_download, action_mdownload,
     action_get_info, action_share,
-    action_browse, action_qxh, action_move, action_remove,
+    action_shell, action_qxh, action_move, action_remove,
     action_mkdir
 )
 from lib.file_config_helper import create_and_get_config_folder, force_permission_file_read_write_owner
@@ -99,7 +99,7 @@ if __name__ == '__main__':
 
   # Manage command
   mgc = MsGraphClient(tr.get_session_from_token())
-  if args.command == "get_user":
+  if args.command == "whoami":
     action_get_user(mgc)
 
   if args.command == "ls":
@@ -116,8 +116,8 @@ if __name__ == '__main__':
   if args.command == "raw_cmd":
     action_raw_cmd(mgc)
 
-  if args.command == "browse":
-    action_browse(mgc)
+  if args.command == "shell":
+    action_shell(mgc)
 
   if args.command == "get":
     action_download(mgc, args.remotefile, args.dstlocalpath)
