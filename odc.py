@@ -23,6 +23,7 @@ from lib.action_helper import (
 from lib.file_config_helper import create_and_get_config_folder, force_permission_file_read_write_owner
 import os
 import sys
+from lib._common import VERSION
 from os.path import exists
 
 
@@ -141,5 +142,8 @@ if __name__ == '__main__':
 
   if args.command == "qxh":
     action_qxh(args.srcfile)
+
+  if args.command == "version":
+    print(VERSION)
 
   mgc.close()

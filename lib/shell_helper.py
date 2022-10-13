@@ -27,6 +27,7 @@ from lib.graph_helper import MsGraphClient
 from lib.msobject_info import (
     MsFileInfo, MsFolderInfo, MsObject,
     ObjectInfoFactory as Oif, StrPathUtil)
+from lib._common import PROGRAM_NAME, get_versionned_name
 
 lg = logging.getLogger('odc.browser')
 
@@ -681,6 +682,8 @@ class OneDriveShell:
     self.current_fi.retrieve_children_info(
         only_folders=self.only_folders, recursive=False)
 
+    print(get_versionned_name())
+    print('Type "help" or "license" for more information')
     while True:
 
       my_raw_input = input(f"{self.get_prompt()}")
@@ -741,6 +744,8 @@ class OneDriveShell:
 
       elif cmd == "help" or cmd == "h":
         if len(parts_cmd) == 1:
+          print(get_versionned_name())
+          print("")
           print("Available commands")
           for (k, v) in self.dict_cmds.items():
             print(f"  {k:20}{v.argp.description}")
@@ -748,7 +753,13 @@ class OneDriveShell:
           print(f"  {'<number>':20}Browse to folder <number>")
           print(f"  {'!<shell_command>':20}Launch local shell command")
           print(f"  {'set':20}Set a variable")
+          print()
+          print(f"  {'help/h':20}Print this help message")
+          print(f"  {'license':20}Print license")
           print(f"  {'q/quit/exit':20}Quit the shell")
+          print("")
+          print(f"{PROGRAM_NAME} is also available as command line program.")
+          print(f"Launch it with '-h' parameter for more information.")
 
         elif len(parts_cmd) == 2:
           if parts_cmd[1] in self.dict_cmds:
@@ -762,6 +773,15 @@ class OneDriveShell:
             print(
                 "    columnsize/cs       int           Column Size of folder names and files names")
             print("                                      for long listing")
+
+      elif cmd == "license":
+        try:
+          with open("LICENSE", "r") as f:
+            l_content = f.read()
+            print(l_content)
+        except Exception:
+          print(f"Error while reading license.")
+          print(f"Please ensure that your copy of {PROGRAM_NAME} is complete.")
 
       else:
         print("unknown command")

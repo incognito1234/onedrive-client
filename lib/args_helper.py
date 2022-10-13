@@ -5,12 +5,13 @@
 
 import argparse
 import sys
+from lib._common import get_versionned_name
 
 
 def parse_odc_args(default_action):
   parser = argparse.ArgumentParser(
       prog='odc',
-      description="OneDrive Client Program",
+      description=get_versionned_name(),
       allow_abbrev=True)
   parser.add_argument(
       '--logfile',
