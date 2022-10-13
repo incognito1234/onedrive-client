@@ -23,7 +23,6 @@ from lib.action_helper import (
 from lib.file_config_helper import create_and_get_config_folder, force_permission_file_read_write_owner
 import os
 import sys
-
 from os.path import exists
 
 
@@ -65,7 +64,7 @@ def configure_logging(args):
 
 if __name__ == '__main__':
 
-  args = parse_odc_args()
+  args = parse_odc_args(default_action="shell")
 
   # Configure Logger
   configure_logging(args)

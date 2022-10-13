@@ -4,9 +4,10 @@
 
 
 import argparse
+import sys
 
 
-def parse_odc_args():
+def parse_odc_args(default_action):
   parser = argparse.ArgumentParser(
       prog='odc',
       description="OneDrive Client Program",
@@ -146,6 +147,13 @@ def parse_odc_args():
 
   parser_raw_cmd = sub_parsers.add_parser('raw_cmd', help="raw command")
   parser_raw_cmd.set_defaults(command="raw_cmd")
+
+  parser_version = sub_parsers.add_parser(
+      'version', help="print version number")
+  parser_version.set_defaults(command="version")
+
+  if len(sys.argv) == 1:  # Default action
+    sys.argv.append(default_action)
 
   result = parser.parse_args()
 
