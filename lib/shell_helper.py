@@ -558,7 +558,7 @@ class OneDriveShell:
 
     # myparser.add_argument('num', type=int, help='num', nargs='?',default=None)
     sub_parser = myparser.add_subparsers(dest='cmd')
-    sp_cd = sub_parser.add_parser('cd', help='Change directory')
+    sp_cd = sub_parser.add_parser('cd', description='Change directory')
     sp_cd.add_argument('path', type=str, help='Destination path')
 
     sp_ll = sub_parser.add_parser(
@@ -577,7 +577,7 @@ class OneDriveShell:
         help='Enable pagination')
     sp_lls = sub_parser.add_parser(
         'lls', description='Continue listing folder in case of large folder')
-    sp_lls = sub_parser.add_parser(
+    sp_pwd = sub_parser.add_parser(
         'pwd', description='Print full path of current folder')
     sp_get = sub_parser.add_parser(
         'get', description='Download file in current folder')
@@ -645,7 +645,7 @@ class OneDriveShell:
             only_folder=False))
     add_new_cmd(
         'rm',
-        sp_mv,
+        sp_rm,
         action_rm,
         SubCompleterFileOrFolder(
             self,
