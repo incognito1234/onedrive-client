@@ -76,22 +76,26 @@ if __name__ == '__main__':
     exit(0)
 
   token_file_name = f"{config_dirname}/.token.json"
-  force_permission_file_read_write_owner(token_file_name)
   tr = TokenRecorder(token_file_name)
 
   if args.command == 'init':
 
     token_ok = tr.get_token_interactivaly(
-        "Enter the following URL in a browser and connect to your MS Account:\n\n",
-        "\nAn error page should be displayed. \nCopy/Paste here the url which appears in the address bar: \n")
+        ("Enter the following URL in a browser"
+         " and connect to your MS Account:\n\n"),
+        ("\nAn error page should be displayed. \n"
+         "Copy/Paste here the url which appears in the address bar: \n"))
     if token_ok:
       tr.store_token()
+      print("initialization OK")
     else:
       print("error during initialization of token")
     quit()
-  else:
+
+  if os.path.exists(token_file_name):
     tr.init_token_from_file()
     tr.store_token()
+    force_permission_file_read_write_owner(token_file_name)
 
   if not tr.token_exists():
     print(f"please connect first with {sys.argv[0]} init")
