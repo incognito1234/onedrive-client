@@ -485,6 +485,39 @@ class OneDriveShell:
       else:
         print(f"{file_name} is not a file of current folder({self.current_fi.path})")
 
+    def action_put(self2, args):
+
+      src_filename = os.path.split(args.srcfile)[1]
+
+      # Compute dst_folder_path and dst_filename
+      (lfip_dst, rt_dst) = MsObject.get_lastfolderinfo_path(
+          self.root_folder, args.dstpath, self.current_fi)
+
+      if lfip_dst.relative_path_is_a_folder(rt_dst, True):
+
+        dst_parent = lfip_dst.get_child_folder(rt_dst)
+        if dst_parent.relative_path_is_a_file(src_filename):
+          print(f"{dst_parent.path}/{src_filename} already exists."
+                f" Remove it before upload")
+          return False
+        dst_folder_path = os.path.normpath(dst_parent.path)
+        dst_filename = src_filename
+
+      elif lfip_dst.relative_path_is_a_file(rt_dst, True):
+        print(f"{rt_dst} is a file. Remove it before upload.")
+        return False
+      else:
+        dst_parent = lfip_dst
+        dst_folder_path = os.path.normpath(lfip_dst.path)
+        dst_filename = rt_dst
+
+      self.mgc.put_file_content(dst_folder_path, args.srcfile, dst_filename)
+
+      msoi_new_file = Oif.get_object_info(
+          self.mgc, f"{dst_folder_path}/{dst_filename}", parent=dst_parent)[1]
+      msoi_new_file.update_parent_after_arrival(dst_parent)
+      return True
+
     def action_mv(self2, args):
       # lfip = last_folder_info_path
       # rt = remaining_text
@@ -582,6 +615,10 @@ class OneDriveShell:
     sp_get = sub_parser.add_parser(
         'get', description='Download file in current folder')
     sp_get.add_argument('remotepath', type=str, help='remote file')
+    sp_put = sub_parser.add_parser(
+        'put', description='Upload a file')
+    sp_put.add_argument('srcfile', type=str, help='source file')
+    sp_put.add_argument('dstpath', type=str, help='destination path')
     sp_rm = sub_parser.add_parser(
         'rm', description='Remove a file or a folder')
     sp_rm.add_argument(
@@ -636,6 +673,7 @@ class OneDriveShell:
         SubCompleterFileOrFolder(
             self,
             only_folder=False))
+    add_new_cmd('put', sp_put, action_put, SubCompleterNone())
     add_new_cmd(
         'mv',
         sp_mv,
