@@ -49,7 +49,7 @@ class CommonCompleter:
       except ValueError as e:
         result = shlex.split(input + '"')
 
-    if len(result) > 1 and input[-1] == " " and result[-1][-1] != " ":
+    if len(result) >= 1 and input[-1] == " " and result[-1][-1] != " ":
       result.append("")
 
     return result
