@@ -40,15 +40,19 @@ class CommonCompleter:
   def get_cmd_parts_with_quotation_guess(input):
     try:
       # WARNING: does not work with win32 if a backslash is included in input
-      return shlex.split(input)
+      result = shlex.split(input)
 
     except ValueError as e:
       try:
-        return shlex.split(input + "'")
+        result = shlex.split(input + "'")
 
       except ValueError as e:
-        return shlex.split(input + '"')
-  pass
+        result = shlex.split(input + '"')
+
+    if len(result) > 1 and input[-1] == " " and result[-1][-1] != " ":
+      result.append("")
+
+    return result
 
   @staticmethod
   def extract_raw_last_args(input, parsed_last_arg):
@@ -137,7 +141,8 @@ class SubCompleterFileOrFolder(SubCompleter):
 
     if len(parts_cmd) > 1:
       last_arg = parts_cmd[-1]
-      was_relative_path = len(last_arg) > 0 and last_arg[0] != '/'
+      was_relative_path = len(
+          last_arg) > 0 and last_arg[0] != '/' or last_arg == ""
 
       # lfip = last_folder_info_path   -  rt = remaining test
       (lfip, rt) = MsObject.get_lastfolderinfo_path(
@@ -159,8 +164,12 @@ class SubCompleterFileOrFolder(SubCompleter):
     # Extract start of last arguments to be escaped if necessary. Other
     # arguments won't be changed
     if len(parts_cmd) > 1:
-      raw_last_arg = CommonCompleter.extract_raw_last_args(text, parts_cmd[-1])
-      start_line = text[:-(len(raw_last_arg))]
+      if parts_cmd[-1] != "":
+        raw_last_arg = CommonCompleter.extract_raw_last_args(
+            text, parts_cmd[-1])
+        start_line = text[:-(len(raw_last_arg))]
+      else:
+        start_line = text
     else:  # len(parts_cmd) == 1
       start_line = text.rstrip() + " "
 
@@ -196,15 +205,15 @@ class SubCompleterLocalCommand(SubCompleter):
   """
   RE_SPACE = re.compile('.*\\s+$', re.M)
 
-  def __init__(self):
+  def __init__(self, custom_command=None, first_exclamation_mark=True):
     super(self.__class__, self).__init__()
     self.builtins = None
-    self.commands = {
-        'foo': True,
-        'bar': False,
-    }
+    self.commands = {}
+    if custom_command is not None:
+      self.commands[custom_command] = True
     self.cmd_lookup = None
     self.path_lookup = None
+    self.__first_exclamation_mark = first_exclamation_mark
 
     # try to get shell builtins
     shell = os.environ.get('SHELL')
@@ -219,7 +228,6 @@ class SubCompleterLocalCommand(SubCompleter):
   def _generate(self, prefix):
     def begins_with(s): return s[:len(prefix)] == prefix
     self.cmd_lookup = {}
-    # lg.debug("Entering generate")
 
     # append commands in PATH
     for path in map(os.path.expanduser, os.environ.get('PATH', '').split(':')):
@@ -270,18 +278,27 @@ class SubCompleterLocalCommand(SubCompleter):
     "Generic readline completion entry point."
 
     try:
-      buffer = text[1:]  # remove first '!'
+      # remove first '!'
+      buffer = text[1:] if self.__first_exclamation_mark else text
       text_part = buffer.split()
       # account for last argument ending in a space
       if text_part and SubCompleterLocalCommand.RE_SPACE.match(buffer):
         text_part.append('')
 
+      if len(text_part) == 0:
+        return []
       last_arg = text_part[-1]
       # command completion
+      first_char = "!" if self.__first_exclamation_mark else ""
       if len(text_part) < 2:
         self._generate(last_arg)
         result = [c + ' ' for c in self.cmd_lookup.keys()]
-        return list(map(lambda x: SubCompleter.SCResult(f"!{x}", x), result))
+        return list(
+            map(
+                lambda x: SubCompleter.SCResult(
+                    f"{first_char}{x}",
+                    x),
+                result))
 
       else:
         # check if we should do path completion
@@ -296,12 +313,34 @@ class SubCompleterLocalCommand(SubCompleter):
         return list(
             map(
                 lambda x: SubCompleter.SCResult(
-                    f"!{start_line} {x}",
+                    f"{first_char}{start_line} {x}",
                     x),
                 result))
 
     except Exception as e:
       lg.error(f"[subCompleter shell]Error '{e}'")
+
+
+class SubCompleterMulti(SubCompleter):
+
+  @beartype
+  def __init__(self, ods: "OneDriveShell", custom_command: str):
+    super(self.__class__, self).__init__()
+    self.__sc_first_arg = SubCompleterLocalCommand(
+        custom_command=custom_command, first_exclamation_mark=False)
+    self.__sc_second_arg = SubCompleterFileOrFolder(ods, False)
+    self.lg_complete = logging.getLogger("odc.browser.completer")
+
+  @beartype
+  def values(self, text: str) -> List[SubCompleter.SCResult]:
+    parts_cmd = CommonCompleter.get_cmd_parts_with_quotation_guess(text)
+    self.lg_complete.debug(parts_cmd)
+    if ((text[-1] == " " and len(parts_cmd) == 1)
+            or (text[-1] != " " and len(parts_cmd) == 2)):
+      return self.__sc_first_arg.values(text)
+    elif ((text[-1] == " " and len(parts_cmd) == 2)
+          or (text[-1] != " " and len(parts_cmd) == 3)):
+      return self.__sc_second_arg.values(text)
 
 
 class SubCompleterNone(SubCompleter):
@@ -360,7 +399,6 @@ class Completer:
 
       if state == 0:
         parts_cmd = CommonCompleter.get_cmd_parts_with_quotation_guess(text)
-
         if len(parts_cmd) > 0 and (parts_cmd[0] in self.shell.dict_cmds):
           sub_completer = self.shell.dict_cmds[parts_cmd[0]].sub_completer
           self.values = sub_completer.values(text)
@@ -673,7 +711,7 @@ class OneDriveShell:
         SubCompleterFileOrFolder(
             self,
             only_folder=False))
-    add_new_cmd('put', sp_put, action_put, SubCompleterNone())
+    add_new_cmd('put', sp_put, action_put, SubCompleterMulti(self, 'put'))
     add_new_cmd(
         'mv',
         sp_mv,
