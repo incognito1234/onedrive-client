@@ -531,6 +531,9 @@ class OneDriveShell:
       (lfip_dst, rt_dst) = MsObject.get_lastfolderinfo_path(
           self.root_folder, args.dstpath, self.current_fi)
 
+      if lfip_dst is None:
+        print("destination folder not found")
+        return False
       if lfip_dst.relative_path_is_a_folder(rt_dst, True):
 
         dst_parent = lfip_dst.get_child_folder(rt_dst)
@@ -563,6 +566,9 @@ class OneDriveShell:
       # Compute source path
       (lfip_src, rt_src) = MsObject.get_lastfolderinfo_path(
           self.root_folder, args.srcpath, self.current_fi)
+      if lfip_src is None:
+        print("source folder not found")
+        return False
       if lfip_src.relative_path_is_a_file(rt_src, True):
         src_obj = lfip_src.get_child_file(rt_src)
       elif lfip_src.relative_path_is_a_folder(rt_src, True):
@@ -574,6 +580,9 @@ class OneDriveShell:
       # Compute dest path
       (lfip_dst, rt_dst) = MsObject.get_lastfolderinfo_path(
           self.root_folder, args.dstpath, self.current_fi)
+      if lfip_dst is None:
+        print("source folder not found")
+        return False
       if lfip_dst.relative_path_is_a_folder(rt_dst, True):
         is_a_renaming = False
         dst_parent = lfip_dst.get_child_folder(rt_dst)
@@ -603,6 +612,9 @@ class OneDriveShell:
       # Compute dest path
       (lfip_dst, rt_dst) = MsObject.get_lastfolderinfo_path(
           self.root_folder, args.dstpath, self.current_fi)
+      if lfip_dst is None:
+        print("destination folder not found")
+        return False
       if lfip_dst.relative_path_is_a_folder(rt_dst, True):
         dst_parent = lfip_dst.get_child_folder(rt_dst)
         folder_name = rt_dst
