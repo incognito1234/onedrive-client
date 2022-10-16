@@ -294,6 +294,7 @@ class MsFolderInfo(MsObject):
           self.__mgc,
           id=folder_json["id"],
           size=0,
+          child_count=0,
           parent=self)
       self.__add_folder_info_if_necessary(new_folder_info)
       if self.child_count is not None:

@@ -598,6 +598,24 @@ class OneDriveShell:
       src_obj.move_object(dst_parent)
       return True
 
+    def action_mkdir(self2, args):
+
+      # Compute dest path
+      (lfip_dst, rt_dst) = MsObject.get_lastfolderinfo_path(
+          self.root_folder, args.dstpath, self.current_fi)
+      if lfip_dst.relative_path_is_a_folder(rt_dst, True):
+        dst_parent = lfip_dst.get_child_folder(rt_dst)
+        folder_name = rt_dst
+      elif lfip_dst.relative_path_is_a_file(rt_dst, True):
+        print(f"'{args.dstpath} exists and is a file.")
+        return False
+      else:
+        dst_parent = lfip_dst
+        folder_name = rt_dst
+
+      msoi_newfolder = dst_parent.create_empty_subfolder(folder_name)
+      return msoi_newfolder is not None
+
     def action_rm(self2, args):
       (lfip_dst, rt_dst) = MsObject.get_lastfolderinfo_path(
           self.root_folder, args.dstpath, self.current_fi)
@@ -678,6 +696,8 @@ class OneDriveShell:
     sp_stat = sub_parser.add_parser(
         'stat', description='Get info about object')
     sp_stat.add_argument('remotepath', type=str, help='destination object')
+    sp_mkdir = sub_parser.add_parser('mkdir', description='Make a folder')
+    sp_mkdir.add_argument('dstpath', type=str, help='path of new folder')
     sp_l_cd = sub_parser.add_parser('!cd', description="Change local folder")
     sp_l_cd.add_argument('path', type=str, help='Destination path')
 
@@ -704,6 +724,8 @@ class OneDriveShell:
         SubCompleterFileOrFolder(
             self,
             only_folder=False))
+    add_new_cmd('mkdir', sp_mkdir, action_mkdir,
+                SubCompleterFileOrFolder(self, only_folder=True))
     add_new_cmd(
         'get',
         sp_get,
