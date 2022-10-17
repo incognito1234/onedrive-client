@@ -1,6 +1,7 @@
 #  Copyright 2019-2022 Jareth Lomson <jareth.lomson@gmail.com>
 #  This file is part of OneDrive Client Program which is released under MIT License
 #  See file LICENSE for full license details
+import datetime
 import logging
 import math
 import os
@@ -9,7 +10,7 @@ from abc import ABC, abstractmethod
 from beartype import beartype
 from lib._typing import Optional, Tuple
 from lib.graph_helper import MsGraphClient
-from lib.datetime_helper import str_from_ms_datetime
+from lib.datetime_helper import utc_dt_from_str_ms_datetime, utc_dt_now
 from lib.strpathutil import StrPathUtil
 
 lg = logging.getLogger('odc.msobject')
@@ -25,6 +26,8 @@ class MsObject(ABC):
           parent_path: str,
           ms_id: str,
           size: int,
+          lmdt: datetime.datetime,
+          cdt: datetime.datetime,
           is_root: bool = False):
     # Parent stat must not been updated if parent has just been initiated through mgc_response:
     #   - mgc_response contains child count, size but not all children
@@ -33,6 +36,8 @@ class MsObject(ABC):
     self.parent = parent
     self.__name = name
     self.__parent_path = parent_path
+    self.creation_datetime = cdt
+    self.last_modified_datetime = lmdt
     self.__is_root = is_root  # only used to compute path
 
   @property
@@ -60,36 +65,44 @@ class MsObject(ABC):
     return any(getattr(f, '__isabstractmethod__', False) for
                f in (self._fget, self._fset, self._fdel))
 
-  def update_parent_before_removal(self):
+  def update_parent_before_removal(self, lmdt=None):
     if self.parent is None:
       return
-
+    if lmdt is None:
+      lmdt = utc_dt_now()
     self.parent.child_count -= 1
 
     current_parent = self.parent
     while current_parent is not None:
       current_parent.__size -= self.size
+      current_parent.last_modified_datetime = lmdt
       current_parent = current_parent.parent
 
     self.parent._remove_info_for_child(self)
 
   @beartype
-  def update_parent_after_arrival(self, new_parent: Optional["MsFolderInfo"]):
+  def update_parent_after_arrival(self,
+                                  new_parent: Optional["MsFolderInfo"],
+                                  lmdt=Optional[datetime.datetime]):
     if new_parent is None:
       return
+    if lmdt is None:
+      lmdt = utc_dt_now()
     new_parent.child_count += 1
     current_parent = new_parent
     while current_parent is not None:
       current_parent.__size += self.__size
+      current_parent.last_modified_datetime = lmdt
       current_parent = current_parent.parent
     new_parent._add_object_info(self)
 
   @beartype
-  def move_object(self, new_parent: "MsFolderInfo"):
+  def move_object(self, new_parent: "MsFolderInfo",
+                  lmdt: Optional[datetime.datetime] = None):
     self.update_parent_before_removal()
     self.parent = new_parent
     self.__parent_path = new_parent.path
-    self.update_parent_after_arrival(new_parent)
+    self.update_parent_after_arrival(new_parent, lmdt)
 
   @beartype
   def rename(self, new_name: str):
@@ -176,7 +189,7 @@ class MsFolderInfo(MsObject):
         Init folder info
         mgc   = MsGraphClient
     """
-    super().__init__(parent, name, parent_path, id, size, is_root)
+    super().__init__(parent, name, parent_path, id, size, lmdt, cdt, is_root)
     self.__mgc = mgc
     self.children_file = []
     self.children_folder = []
@@ -188,9 +201,6 @@ class MsFolderInfo(MsObject):
 
     self.__children_files_retrieval_status = None    # None,"partial" or "all"
     self.__children_folders_retrieval_status = None  # None, "partial" or "all"
-
-    self.last_modified_datetime = lmdt
-    self.creation_datetime = cdt
 
   @beartype
   def _remove_info_for_child(self, child: MsObject):
@@ -288,15 +298,14 @@ class MsFolderInfo(MsObject):
   def create_empty_subfolder(self, folder_name):
     folder_json = self.__mgc.create_folder(self.path, folder_name)
     if folder_json:
-      new_folder_info = MsFolderInfo(
-          folder_name,
-          f"{self.path}",
-          self.__mgc,
-          id=folder_json["id"],
-          size=0,
-          child_count=0,
-          parent=self)
+      new_folder_info = ObjectInfoFactory.MsFolderFromMgcResponse(
+          mgc=self.__mgc,
+          mgc_response_json=folder_json,
+          parent=self
+      )
       self.__add_folder_info_if_necessary(new_folder_info)
+      new_folder_info.update_parent_after_arrival(
+          self, new_folder_info.last_modified_datetime)
       if self.child_count is not None:
         self.child_count += 1
       return new_folder_info
@@ -456,12 +465,10 @@ class MsFileInfo(MsObject):
           self, name, parent_path, mgc, file_id,
           size, qxh, s1h, cdt, lmdt, parent=None):
     # qxh = quickxorhash
-    super().__init__(parent, name, parent_path, file_id, size)
+    super().__init__(parent, name, parent_path, file_id, size, lmdt, cdt)
     self.mgc = mgc
     self.sha1hash = s1h
     self.qxh = qxh
-    self.creation_datetime = cdt
-    self.last_modified_datetime = lmdt
 
   def _get_id(self):
     return self.__id
@@ -549,7 +556,8 @@ class ObjectInfoFactory:
         parent_path = ""
         is_root = True
 
-    #full_path = "" if "root" in mgc_response_json else f"{parent_path}/{mgc_response_json['name']}"
+    # full_path = "" if "root" in mgc_response_json else
+    # f"{parent_path}/{mgc_response_json['name']}"
     result = MsFolderInfo(
         parent_path=parent_path,
         name=mgc_response_json['name'],
@@ -558,10 +566,11 @@ class ObjectInfoFactory:
         child_count=mgc_response_json['folder']['childCount'],
         size=mgc_response_json['size'],
         parent=parent,
-        lmdt=str_from_ms_datetime(mgc_response_json['lastModifiedDateTime']),
-        cdt=str_from_ms_datetime(mgc_response_json['createdDateTime']),
-        is_root=is_root
-    )
+        lmdt=utc_dt_from_str_ms_datetime(
+            mgc_response_json['lastModifiedDateTime']),
+        cdt=utc_dt_from_str_ms_datetime(
+            mgc_response_json['createdDateTime']),
+        is_root=is_root)
     if parent is not None:
       parent._MsFolderInfo__add_folder_info_if_necessary(result)
     return result
@@ -579,16 +588,19 @@ class ObjectInfoFactory:
       qxh = mgc_response_json['file']['hashes']['quickXorHash']
     else:
       qxh = None
-    result = MsFileInfo(mgc_response_json['name'],
-                        mgc_response_json['parentReference']['path'][13:],
-                        mgc,
-                        mgc_response_json['id'],
-                        mgc_response_json['size'],
-                        qxh,
-                        mgc_response_json['file']['hashes']['sha1Hash'],
-                        str_from_ms_datetime(mgc_response_json['createdDateTime']),
-                        str_from_ms_datetime(mgc_response_json['lastModifiedDateTime']),
-                        parent=parent)
+    result = MsFileInfo(
+        mgc_response_json['name'],
+        mgc_response_json['parentReference']['path'][13:],
+        mgc,
+        mgc_response_json['id'],
+        mgc_response_json['size'],
+        qxh,
+        mgc_response_json['file']['hashes']['sha1Hash'],
+        utc_dt_from_str_ms_datetime(
+            mgc_response_json['createdDateTime']),
+        utc_dt_from_str_ms_datetime(
+            mgc_response_json['lastModifiedDateTime']),
+        parent=parent)
 
     if parent is not None:
       parent._MsFolderInfo__add_file_info_if_necessary(result)

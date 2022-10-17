@@ -556,7 +556,8 @@ class OneDriveShell:
 
       msoi_new_file = Oif.get_object_info(
           self.mgc, f"{dst_folder_path}/{dst_filename}", parent=dst_parent)[1]
-      msoi_new_file.update_parent_after_arrival(dst_parent)
+      msoi_new_file.update_parent_after_arrival(
+          dst_parent, msoi_new_file.last_modified_datetime)
       return True
 
     def action_mv(self2, args):
