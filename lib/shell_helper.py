@@ -497,9 +497,40 @@ class OneDriveShell:
           with_pagination=args.p)
 
     def action_ls(self2, args):
-      self.ls_formatter.print_folder_children_lite(
-          self.current_fi, only_folders=self.only_folders,
-          with_pagination=args.p)
+      errors = []
+      paths_to_be_listed = []
+
+      # Compute paths and errors
+      for path in args.path:
+        (lfip, rt_path) = MsObject.get_lastfolderinfo_path(
+            self.root_folder, path, self.current_fi)
+        if lfip is None:
+          errors.append(f"'{path}' not found")
+        else:
+          if lfip.relative_path_is_a_folder(rt_path, True):
+            paths_to_be_listed.append(lfip.get_child_folder(rt_path))
+          elif lfip.relative_path_is_a_file(rt_path, True):
+            errors.append(f"'{path}' is a file. No listing available.")
+          else:
+            errors.append(f"'{path}' not found.")
+
+      # Print errors
+      list(map(lambda x: print(x), errors))
+
+      # Print paths
+      lines_to_be_printed = []
+      for fi in paths_to_be_listed:
+        if len(paths_to_be_listed) > 1:
+          lines_to_be_printed.append("")
+          lines_to_be_printed.append(f"{fi.path}/:")
+        lines_to_be_printed.append(
+            self.ls_formatter.format_folder_children_lite(
+                fi, only_folders=self.only_folders))
+      str_to_be_printed = '\n'.join(lines_to_be_printed)
+      if args.p:
+        pydoc.pipepager(str_to_be_printed, cmd=LsFormatter.PAGER_COMMAND)
+      else:
+        print(str_to_be_printed)
 
     def action_lls(self2, args):
       self.ls_formatter.print_folder_children_lite_next(
@@ -677,6 +708,12 @@ class OneDriveShell:
         action='store_true',
         default=False,
         help='Enable pagination')
+    sp_ls.add_argument(
+        'path',
+        type=str,
+        help='Path of folder',
+        nargs='*',
+        default='.')
     sp_lls = sub_parser.add_parser(
         'lls', description='Continue listing folder in case of large folder')
     sp_pwd = sub_parser.add_parser(
@@ -720,47 +757,23 @@ class OneDriveShell:
 
     # Populate commands
     self.dict_cmds = {}
-    add_new_cmd(
-        'cd',
-        sp_cd,
-        action_cd,
-        SubCompleterFileOrFolder(
-            self,
-            only_folder=True))
+    add_new_cmd('cd', sp_cd, action_cd, SubCompleterFileOrFolder(
+        self, only_folder=True))
     add_new_cmd('ll', sp_ll, action_ll, SubCompleterNone())
-    add_new_cmd('ls', sp_ls, action_ls, SubCompleterNone())
+    add_new_cmd('ls', sp_ls, action_ls, SubCompleterFileOrFolder(
+        self, only_folder=True))
     add_new_cmd('lls', sp_lls, action_lls, SubCompleterNone())
-    add_new_cmd(
-        'stat',
-        sp_stat,
-        action_stat,
-        SubCompleterFileOrFolder(
-            self,
-            only_folder=False))
-    add_new_cmd('mkdir', sp_mkdir, action_mkdir,
-                SubCompleterFileOrFolder(self, only_folder=True))
-    add_new_cmd(
-        'get',
-        sp_get,
-        action_get,
-        SubCompleterFileOrFolder(
-            self,
-            only_folder=False))
+    add_new_cmd('stat', sp_stat, action_stat, SubCompleterFileOrFolder(
+        self, only_folder=False))
+    add_new_cmd('mkdir', sp_mkdir, action_mkdir, SubCompleterFileOrFolder(
+        self, only_folder=True))
+    add_new_cmd('get', sp_get, action_get, SubCompleterFileOrFolder(
+        self, only_folder=False))
     add_new_cmd('put', sp_put, action_put, SubCompleterMulti(self, 'put'))
-    add_new_cmd(
-        'mv',
-        sp_mv,
-        action_mv,
-        SubCompleterFileOrFolder(
-            self,
-            only_folder=False))
-    add_new_cmd(
-        'rm',
-        sp_rm,
-        action_rm,
-        SubCompleterFileOrFolder(
-            self,
-            only_folder=False))
+    add_new_cmd('mv', sp_mv, action_mv, SubCompleterFileOrFolder(
+        self, only_folder=False))
+    add_new_cmd('rm', sp_rm, action_rm, SubCompleterFileOrFolder(
+        self, only_folder=False))
     add_new_cmd('pwd', sp_pwd, action_pwd, SubCompleterNone())
     # For any strange reason, cd does not work as common 'os.system'
     add_new_cmd('!cd', sp_l_cd, action_l_cd, SubCompleterLocalCommand())
@@ -1107,11 +1120,10 @@ class LsFormatter():
     return i - start_number
 
   @beartype
-  def print_folder_children_lite(
+  def format_folder_children_lite(
           self,
           fi: MsFolderInfo,
-          only_folders: bool = True,
-          with_pagination: bool = False):
+          only_folders: bool = True):
 
     if ((not fi.folders_retrieval_has_started() and only_folders)
             or (not fi.files_retrieval_has_started() and not only_folders)):
@@ -1124,7 +1136,21 @@ class LsFormatter():
         lambda x: self.file_formatter.format_lite(x),
         fi.children_file)
     all_names = list(folder_names) + list(file_names)
-    self.column_printer.print_with_columns(all_names, with_pagination)
+    return self.column_printer.format_with_columns(all_names)
+
+  @beartype
+  def print_folder_children_lite(
+          self,
+          fi: MsFolderInfo,
+          only_folders: bool = True,
+          with_pagination: bool = False):
+
+    all_names = self.format_folder_children_lite(fi, only_folders)
+    str_to_be_printed = '\n'.join(all_names)
+    if with_pagination:
+      pydoc.pipepager(str_to_be_printed, cmd=LsFormatter.PAGER_COMMAND)
+    else:
+      print(str_to_be_printed)
 
   @beartype
   def print_folder_children_lite_next(
@@ -1207,7 +1233,7 @@ class ColumnsPrinter():
     else:
       return low
 
-  def print_with_columns(self, what, with_pagination=False):
+  def format_with_columns(self, what):
     # what : list of FormattedString to be printed
     if len(what) == 0:
       return
@@ -1227,8 +1253,13 @@ class ColumnsPrinter():
                 what[j],
                 cs[k]))
       str_to_be_printed += new_line.to_be_printed.rstrip() + "\n"
+
     # remove trailing carriage return
     str_to_be_printed = str_to_be_printed[:-1]
+    return str_to_be_printed
+
+  def print_with_columns(self, what, with_pagination=False):
+    str_to_be_printed = self.format_with_columns(what)
     if with_pagination:
       pydoc.pipepager(str_to_be_printed, cmd=LsFormatter.PAGER_COMMAND)
     else:
