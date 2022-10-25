@@ -4,6 +4,7 @@
 import os
 import math
 import pydoc
+from lib._typing import List
 from beartype import beartype
 
 # 'R' to keep colors - 'X' to keep the screen - 'F' no paging if one screen
@@ -25,12 +26,14 @@ class FormattedString():
 
   @staticmethod
   @beartype
-  def build_from_string(what: str):
+  def build_from_string(what: str) -> "FormattedString":
     return FormattedString(what, what, len(what))
 
   @staticmethod
   @beartype
-  def build_from_colorized_string(what: str, raw_what: str):
+  def build_from_colorized_string(
+          what: str,
+          raw_what: str) -> "FormattedString":
     return FormattedString(what, raw_what, len(raw_what))
 
   @staticmethod
@@ -120,7 +123,8 @@ class ColumnsPrinter():
     else:
       return low
 
-  def format_with_columns(self, what):
+  @beartype
+  def format_with_columns(self, what: List[FormattedString]) -> str:
     # what : list of FormattedString to be printed
     if len(what) == 0:
       return
@@ -151,14 +155,20 @@ class ColumnsPrinter():
 
 
 @beartype
-def alignright(printable_what: FormattedString, nb: int, fillchar=" "):
+def alignright(
+        printable_what: FormattedString,
+        nb: int,
+        fillchar=" ") -> FormattedString:
   return FormattedString.build_from_colorized_string(
       f"{(fillchar * (nb - printable_what.len_to_be_printed))}{printable_what.to_be_printed}",
       f"{(fillchar * (nb - printable_what.len_to_be_printed))}{printable_what.raw}")
 
 
 @beartype
-def alignleft(printable_what: FormattedString, nb: int, fillchar=" "):
+def alignleft(
+        printable_what: FormattedString,
+        nb: int,
+        fillchar=" ") -> FormattedString:
   return FormattedString.build_from_colorized_string(
       f"{printable_what.to_be_printed}{(fillchar * (nb - printable_what.len_to_be_printed))}",
       f"{printable_what.raw}{(fillchar * (nb - printable_what.len_to_be_printed))}")

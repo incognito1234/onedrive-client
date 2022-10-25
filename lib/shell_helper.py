@@ -19,7 +19,7 @@ import shlex
 import pydoc
 from abc import ABC, abstractmethod
 import re
-from lib._typing import List, Optional
+from lib._typing import List
 from beartype import beartype
 
 from lib.graph_helper import MsGraphClient
@@ -1064,7 +1064,7 @@ class LsFormatter():
   def format_folder_children_lite(
           self,
           fi: MsFolderInfo,
-          only_folders: bool = True):
+          only_folders: bool = True) -> str:
 
     if ((not fi.folders_retrieval_has_started() and only_folders)
             or (not fi.files_retrieval_has_started() and not only_folders)):
