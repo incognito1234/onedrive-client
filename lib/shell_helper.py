@@ -523,10 +523,12 @@ class OneDriveShell:
           lines_to_be_printed.append(f"{fi.path}/:")
         str_folder_children = (
             self.ls_formatter.format_folder_children_lite(
-                fi, only_folders=self.only_folders) if not args.l else
-            self.ls_formatter.format_folder_children(
-                fi, only_folders=self.only_folders, start_number=1)
-        )
+                fi,
+                only_folders=self.only_folders,
+                recursive=args.r,
+                depth=args.d) if not args.l else self.ls_formatter.format_folder_children_long(
+                fi, only_folders=self.only_folders,
+                recursive=args.r, depth=args.d))
 
         lines_to_be_printed.append(str_folder_children)
       str_to_be_printed = '\n'.join(lines_to_be_printed)
@@ -706,6 +708,16 @@ class OneDriveShell:
         default=False,
         help='Add details to file and folders'
     )
+    sp_ls.add_argument(
+        '-r',
+        action='store_true',
+        default=False,
+        help='Recursive listing')
+    sp_ls.add_argument(
+        '-d',
+        type=int,
+        default=1,
+        help='Recursing depth (Default=1)')
     sp_ls.add_argument(
         'path',
         type=str,
@@ -1010,52 +1022,76 @@ class LsFormatter():
     self.include_number = include_number
 
   @beartype
-  def format_folder_children(
+  def __format_folder_children(
           self,
           fi: MsFolderInfo,
-          start_number: int = 0,
+          with_columns: bool,
+          folder_desc_formatter,
+          file_desc_formatter,
+          only_folders: bool = True,
+          recursive: bool = False,
+          depth: int = 999,
+          is_first_folder: bool = False) -> str:
+    # A header with the folder path is added to each children
+    # The same header is added if is_first_folder is True
+
+    lg.debug(
+        f"Entering __format_folder_children_lite({fi.path},"
+        f"{only_folders}, {recursive}, {depth})")
+    if ((not fi.folders_retrieval_has_started() and only_folders)
+            or (not fi.files_retrieval_has_started() and not only_folders)):
+      fi.retrieve_children_info(only_folders=only_folders)
+
+    folder_names = map(folder_desc_formatter, fi.children_folder)
+    if not only_folders:
+      file_names = map(file_desc_formatter, fi.children_file)
+    else:
+      file_names = []
+    all_names = list(folder_names) + list(file_names)
+
+    if with_columns:
+      result = self.column_printer.format_with_columns(all_names)
+    else:
+      result = '\n'.join(list(map(lambda x: x.to_be_printed, all_names)))
+
+    if recursive and depth > 0 and len(fi.children_folder) > 0:
+      if is_first_folder:
+        result = f"{fi.path}/:\n" + result
+
+      result += "\n"
+
+      for child_folder in fi.children_folder:
+        result += f"\n{child_folder.path}/:\n"
+        result += self.__format_folder_children(
+            child_folder,
+            with_columns,
+            folder_desc_formatter,
+            file_desc_formatter,
+            only_folders,
+            True,
+            depth - 1,
+            is_first_folder=False)
+        result += "\n"
+
+      result = result[:-1]
+    return result
+
+  @beartype
+  def format_folder_children_long(
+          self,
+          fi: MsFolderInfo,
           recursive: bool = False,
           only_folders: bool = True,
           depth: int = 999) -> str:
-
-    if ((not fi.folders_retrieval_has_started() and only_folders)
-            or (not fi.files_retrieval_has_started() and not only_folders)):
-      fi.retrieve_children_info(
-          only_folders=only_folders,
-          recursive=recursive,
-          depth=depth)
-
-    str_to_be_printed = ""
-    i = start_number
-    for c in fi.children_folder:
-      prefix_number = f"{i:>3} " if self.include_number else ""
-      str_to_be_printed += (
-          f"{FormattedString.concat(prefix_number, self.folder_formatter.format(c)).to_be_printed.rstrip()}"
-          "\n")
-
-      i = i + 1
-    if not only_folders:
-      for c in fi.children_file:
-        prefix_number = f"{i:>3} " if self.include_number else ""
-        str_to_be_printed += (
-            f"{FormattedString.concat(prefix_number, self.file_formatter.format(c)).to_be_printed.rstrip()}"
-            "\n")
-        i = i + 1
-    str_to_be_printed = str_to_be_printed[:-1]  # remove last carriage return
-
-    # FIXME Recursive folder printing does not work (print_children does not
-    # exist anymore)
-    # if recursive and depth > 0:
-    #   for c in fi.children_folder:
-    #     nb_children = c.print_children(
-    #         start_number=i, recursive=False, depth=depth - 1)
-
-    #     i += nb_children
-
-    return str_to_be_printed
+    return self.__format_folder_children(
+        fi, False,
+        self.folder_formatter.format, self.file_formatter.format,
+        only_folders, recursive,
+        depth, True
+    )
 
   @beartype
-  def print_folder_children(
+  def print_folder_children_long(
           self,
           fi: MsFolderInfo,
           start_number: int = 0,
@@ -1063,7 +1099,7 @@ class LsFormatter():
           only_folders: bool = True,
           depth: int = 999,
           with_pagination: bool = False) -> None:
-    str_to_be_printed = self.format_folder_children(
+    str_to_be_printed = self.format_folder_children_long(
         fi, start_number, recursive, only_folders, depth)
     print_with_optional_paging(str_to_be_printed, with_pagination)
 
@@ -1071,29 +1107,30 @@ class LsFormatter():
   def format_folder_children_lite(
           self,
           fi: MsFolderInfo,
-          only_folders: bool = True) -> str:
+          only_folders: bool = True,
+          recursive: bool = False,
+          depth: int = 999) -> str:
+    lg.debug(
+        f"Entering format_folder_children_lite({fi.path},"
+        f"{only_folders}, {recursive}, {depth})")
 
-    if ((not fi.folders_retrieval_has_started() and only_folders)
-            or (not fi.files_retrieval_has_started() and not only_folders)):
-      fi.retrieve_children_info(only_folders=only_folders)
+    result = self.__format_folder_children(
+        fi, True,
+        self.folder_formatter.format_lite, self.file_formatter.format_lite,
+        only_folders, recursive, depth, is_first_folder=True)
 
-    folder_names = map(
-        lambda x: self.folder_formatter.format_lite(x),
-        fi.children_folder)
-    file_names = map(
-        lambda x: self.file_formatter.format_lite(x),
-        fi.children_file)
-    all_names = list(folder_names) + list(file_names)
-    return self.column_printer.format_with_columns(all_names)
+    return result
 
   @beartype
   def print_folder_children_lite(
           self,
           fi: MsFolderInfo,
           only_folders: bool = True,
-          with_pagination: bool = False):
+          with_pagination: bool = False,
+          recursive: bool = False):
 
-    all_names = self.format_folder_children_lite(fi, only_folders)
+    all_names = self.format_folder_children_lite(
+        fi, only_folders, recursive, 1)
     str_to_be_printed = '\n'.join(all_names)
     print_with_optional_paging(str_to_be_printed, with_pagination)
 

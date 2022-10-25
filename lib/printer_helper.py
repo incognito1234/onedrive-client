@@ -127,7 +127,7 @@ class ColumnsPrinter():
   def format_with_columns(self, what: List[FormattedString]) -> str:
     # what : list of FormattedString to be printed
     if len(what) == 0:
-      return
+      return ""
     nbc = self.nb_columns(what)
     cs = self.column_sizes(what, nbc)
     nb_lines = 1 + math.floor((len(what) - 1) / nbc)
