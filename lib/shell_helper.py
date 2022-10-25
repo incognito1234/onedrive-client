@@ -494,11 +494,6 @@ class OneDriveShell:
     def action_cd(self2, args):
       self.change_to_path(args.path)
 
-    def action_ll(self2, args):
-      self.ls_formatter.print_folder_children(
-          self.current_fi, start_number=1, only_folders=self.only_folders,
-          with_pagination=args.p)
-
     def action_ls(self2, args):
       errors = []
       paths_to_be_listed = []
@@ -526,9 +521,14 @@ class OneDriveShell:
         if len(paths_to_be_listed) > 1:
           lines_to_be_printed.append("")
           lines_to_be_printed.append(f"{fi.path}/:")
-        lines_to_be_printed.append(
+        str_folder_children = (
             self.ls_formatter.format_folder_children_lite(
-                fi, only_folders=self.only_folders))
+                fi, only_folders=self.only_folders) if not args.l else
+            self.ls_formatter.format_folder_children(
+                fi, only_folders=self.only_folders, start_number=1)
+        )
+
+        lines_to_be_printed.append(str_folder_children)
       str_to_be_printed = '\n'.join(lines_to_be_printed)
       print_with_optional_paging(str_to_be_printed, args.p)
 
@@ -693,14 +693,6 @@ class OneDriveShell:
     sub_parser = myparser.add_subparsers(dest='cmd')
     sp_cd = sub_parser.add_parser('cd', description='Change directory')
     sp_cd.add_argument('path', type=str, help='Destination path')
-
-    sp_ll = sub_parser.add_parser(
-        'll', description='List current folder with details')
-    sp_ll.add_argument(
-        '-p',
-        action='store_true',
-        default=False,
-        help='Enable pagination')
     sp_ls = sub_parser.add_parser(
         'ls', description='List current folder by column')
     sp_ls.add_argument(
@@ -708,6 +700,12 @@ class OneDriveShell:
         action='store_true',
         default=False,
         help='Enable pagination')
+    sp_ls.add_argument(
+        '-l',
+        action='store_true',
+        default=False,
+        help='Add details to file and folders'
+    )
     sp_ls.add_argument(
         'path',
         type=str,
@@ -759,7 +757,6 @@ class OneDriveShell:
     self.dict_cmds = {}
     add_new_cmd('cd', sp_cd, action_cd, SubCompleterFileOrFolder(
         self, only_folder=True))
-    add_new_cmd('ll', sp_ll, action_ll, SubCompleterNone())
     add_new_cmd('ls', sp_ls, action_ls, SubCompleterFileOrFolder(
         self, only_folder=True))
     add_new_cmd('lls', sp_lls, action_lls, SubCompleterNone())
@@ -1013,14 +1010,13 @@ class LsFormatter():
     self.include_number = include_number
 
   @beartype
-  def print_folder_children(
+  def format_folder_children(
           self,
           fi: MsFolderInfo,
           start_number: int = 0,
           recursive: bool = False,
           only_folders: bool = True,
-          depth: int = 999,
-          with_pagination: bool = False):
+          depth: int = 999) -> str:
 
     if ((not fi.folders_retrieval_has_started() and only_folders)
             or (not fi.files_retrieval_has_started() and not only_folders)):
@@ -1047,18 +1043,29 @@ class LsFormatter():
         i = i + 1
     str_to_be_printed = str_to_be_printed[:-1]  # remove last carriage return
 
-    print_with_optional_paging(str_to_be_printed, with_pagination)
-
     # FIXME Recursive folder printing does not work (print_children does not
     # exist anymore)
-    if recursive and depth > 0:
-      for c in fi.children_folder:
-        nb_children = c.print_children(
-            start_number=i, recursive=False, depth=depth - 1)
+    # if recursive and depth > 0:
+    #   for c in fi.children_folder:
+    #     nb_children = c.print_children(
+    #         start_number=i, recursive=False, depth=depth - 1)
 
-        i += nb_children
+    #     i += nb_children
 
-    return i - start_number
+    return str_to_be_printed
+
+  @beartype
+  def print_folder_children(
+          self,
+          fi: MsFolderInfo,
+          start_number: int = 0,
+          recursive: bool = False,
+          only_folders: bool = True,
+          depth: int = 999,
+          with_pagination: bool = False) -> None:
+    str_to_be_printed = self.format_folder_children(
+        fi, start_number, recursive, only_folders, depth)
+    print_with_optional_paging(str_to_be_printed, with_pagination)
 
   @beartype
   def format_folder_children_lite(
