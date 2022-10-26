@@ -584,18 +584,22 @@ class ObjectInfoFactory:
     if parent is None and not no_warn_if_no_parent:
       lg.warning(
           "[MsFileFromMgcResponse]No parent folder to create a file info")
-    if 'quickXorHash' in mgc_response_json['file']['hashes']:
-      qxh = mgc_response_json['file']['hashes']['quickXorHash']
-    else:
+    if 'hashes' not in mgc_response_json['file']:
       qxh = None
+      sha1hash = None
+    else:
+      mgc_hashes = mgc_response_json['file']['hashes']
+      qxh = (mgc_hashes['quickXorHash']
+             if 'quickXorHash' in mgc_hashes else None)
+      sha1hash = (mgc_hashes['sha1Hash']
+                  if 'sha1Hash' in mgc_hashes else None)
+
     result = MsFileInfo(
         mgc_response_json['name'],
         mgc_response_json['parentReference']['path'][13:],
         mgc,
-        mgc_response_json['id'],
-        mgc_response_json['size'],
-        qxh,
-        mgc_response_json['file']['hashes']['sha1Hash'],
+        mgc_response_json['id'], mgc_response_json['size'],
+        qxh, sha1hash,
         utc_dt_from_str_ms_datetime(
             mgc_response_json['createdDateTime']),
         utc_dt_from_str_ms_datetime(
