@@ -843,14 +843,6 @@ class OneDriveShell:
         except Exception as e:
           print(f"error: {e}")
 
-      elif cmd.isdigit() and int(cmd) <= len(self.current_fi.children_folder):
-
-        int_input = int(cmd)
-        if int_input == 0:
-          self.change_current_folder_to_parent()
-        else:
-          self.current_fi = self.current_fi.children_folder[int(my_input) - 1]
-
       elif cmd[0] == "!":
         os.system(my_raw_input[1:])
 
@@ -883,7 +875,6 @@ class OneDriveShell:
           for (k, v) in self.dict_cmds.items():
             print(f"  {k:20}{v.argp.description}")
 
-          print(f"  {'<number>':20}Browse to folder <number>")
           print(f"  {'!<shell_command>':20}Launch local shell command")
           print(f"  {'set':20}Set a variable")
           print()
