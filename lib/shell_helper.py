@@ -5,6 +5,7 @@ import logging
 
 import os
 import re
+import traceback
 import argparse
 import subprocess
 from platform import platform
@@ -842,6 +843,12 @@ class OneDriveShell:
           self.dict_cmds[cmd].do_action(args)
         except Exception as e:
           print(f"error: {e}")
+          if lg.level >= logging.DEBUG:
+            lg.error(f"Shell error: {e} - Command = {cmd}")
+            error_line = "stack trace :\n"
+            for a in traceback.format_tb(e.__traceback__):  # Print traceback
+              error_line += f"  {a}"
+            lg.debug(error_line)
 
       elif cmd[0] == "!":
         os.system(my_raw_input[1:])
