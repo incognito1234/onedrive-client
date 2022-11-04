@@ -44,12 +44,12 @@ def action_upload(
         mgc: MsGraphClient,
         remote_folder: str,
         src_file: str,
-        with_a_progress_bar: bool):
+        with_progress_bar: bool):
   # Upload a file
   mgc.put_file_content(
       remote_folder,
       src_file,
-      with_a_progress_bar
+      with_progress_bar=with_progress_bar
   )
 
 
