@@ -61,6 +61,10 @@ Differential uploading and downloading (`mput` and `mget` comands) are available
       $ . ../bin/activate
       $ pip -r requirements.txt
 
+- On Windows plateform, import the package pyreadline3
+    
+      $ pip install pyreadline3
+
 - Configure connexion to OneDrive
 
   - Copy `oauth_settings.yml.sample` in `oauth_settings.yml`
