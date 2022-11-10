@@ -14,8 +14,6 @@ from colorama import Fore, Style, init as cinit
 from io import StringIO
 from abc import ABC, abstractmethod
 import sys
-# readline introduce history management in prompt
-import readline
 import shlex
 import pydoc
 from abc import ABC, abstractmethod
@@ -30,6 +28,13 @@ from lib.msobject_info import (
 from lib._common import PROGRAM_NAME, get_versionned_name
 
 lg = logging.getLogger('odc.browser')
+
+try:
+  import readline
+except ModuleNotFoundError as e:
+  print("It seems that you run this program from a Windows plateform.")
+  print("The pyreadline3 module is needed to run the shell")
+  print("Use command 'pip install pyreadline3' to use it")
 
 
 class CommonCompleter:
