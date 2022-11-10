@@ -4,12 +4,14 @@ ODC is a tool to interact with a Microsoft OneDrive Personal Storage.
 
 ## Available features
 
+The following commands are available:
+
     init              Init connexion
     put               Upload a file
     mput              Upload a complete folder
     whoami            Get information about connected user
     ls                List a folder content
-    shell             Interaction shell
+    shell             Interactive shell
     get               Download a file
     mget              Download a complete folder
     stat              Get info from object
@@ -18,9 +20,15 @@ ODC is a tool to interact with a Microsoft OneDrive Personal Storage.
     rm                Remove a file or a folder
     mkdir             Make a folder
 
+`python odc.py` without no arguments launch the interactive shell. On linux platform, it includes a completion feature which recognizes remote files and folders.
+
+`put` command includes the uploading of large file with a retry mechanism in case a chunk is not correctly uploaded.
+
 Parameters are described in help output
 
-    python odc.py <command> -h
+    $ python odc.py <command> -h
+
+
 
 ## Requisites
 ODC has been tested with the following environment
@@ -72,7 +80,13 @@ Differential uploading and downloading (`mput` and `mget` comands) are available
   - Initiate connexion
 
         $ python odc.py init
-        ... and follow instructions
+        ... Copy/Paste provided URL in a browser
+        ... Copy/Paste URL of the browser in the console
+
+- It is now possible to use ODC
+
+      $ python odc.py <args>
+
 
 
 
