@@ -475,14 +475,14 @@ class MsFileInfo(MsObject):
   def str_full_details(self):
     result = (
         f"File - '{self.name}'\n"
-        "  name                  = {self.name}\n"
-        "  full_path             = {self.path}\n"
-        "  id                    = {self.ms_id:>20}\n"
-        "  size                  = {self.size:,}\n"
-        "  quickXorHash          = {self.qxh}\n"
-        "  sha1Hash              = {self.sha1hash}\n"
-        "  creationDateTime      = {self.creation_datetime}\n"
-        "  lastModifiedDateTime  = {self.last_modified_datetime}"
+        f"  name                  = {self.name}\n"
+        f"  full_path             = {self.path}\n"
+        f"  id                    = {self.ms_id:>20}\n"
+        f"  size                  = {self.size:,}\n"
+        f"  quickXorHash          = {self.qxh}\n"
+        f"  sha1Hash              = {self.sha1hash}\n"
+        f"  creationDateTime      = {self.creation_datetime}\n"
+        f"  lastModifiedDateTime  = {self.last_modified_datetime}"
     )
 
     return result
