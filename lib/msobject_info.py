@@ -290,7 +290,7 @@ class MsFolderInfo(MsObject):
     if folder_json:
       new_folder_info = MsFolderInfo(
           folder_name,
-          f"{self.path}/{folder_name}",
+          f"{self.path}",
           self.__mgc,
           id=folder_json["id"],
           size=0,
