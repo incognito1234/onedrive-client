@@ -95,7 +95,8 @@ class TokenRecorder:
     try:
       self.__cache = msal.SerializableTokenCache()
       if os.path.exists(self.filename):
-        self.__cache.deserialize(open(self.filename, "r").read())
+        with open(self.filename, "r") as f:
+          self.__cache.deserialize(f.read())
       app = msal.ConfidentialClientApplication(
           settings['app_id'],
           authority=settings['authority'],
