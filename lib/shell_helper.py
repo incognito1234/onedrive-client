@@ -1,35 +1,30 @@
 #  Copyright 2019-2022 Jareth Lomson <jareth.lomson@gmail.com>
 #  This file is part of OneDrive Client Program which is released under MIT License
 #  See file LICENSE for full license details
-import logging
-
-import os
-import re
-import traceback
 import argparse
-import subprocess
-from platform import platform
-from unittest import expectedFailure
-from colorama import Fore, Style, init as cinit
-from io import StringIO
-from abc import ABC, abstractmethod
-import sys
-import shlex
+import logging
+import os
 import pydoc
-from abc import ABC, abstractmethod
 import re
-from lib._typing import List
-from beartype import beartype
+import shlex
+import subprocess
+import sys
+import traceback
+from abc import ABC, abstractmethod
+from io import StringIO
 
-from lib.graph_helper import MsGraphClient
-from lib.msobject_info import (
-    MsFileInfo, MsFolderInfo, MsObject,
-    ObjectInfoFactory as Oif, StrPathUtil)
-from lib.printer_helper import (
-    FormattedString, ColumnsPrinter,
-    alignright, alignleft, print_with_optional_paging
-)
+from beartype import beartype
+from colorama import Fore, Style
+from colorama import init as cinit
+
 from lib._common import PROGRAM_NAME, get_versionned_name
+from lib._typing import List, Optional, Tuple
+from lib.graph_helper import MsGraphClient
+from lib.msobject_info import MsFileInfo, MsFolderInfo, MsObject
+from lib.msobject_info import ObjectInfoFactory as Oif
+from lib.msobject_info import StrPathUtil
+from lib.printer_helper import (ColumnsPrinter, FormattedString, alignleft,
+                                print_with_optional_paging)
 
 try:
   import readline
@@ -37,7 +32,7 @@ except ModuleNotFoundError as e:
   print("It seems that you run this program from a Windows plateform.")
   print("The pyreadline3 module is needed to run the shell")
   print("Use command 'pip install pyreadline3' to use it")
-  
+
 
 lg = logging.getLogger('odc.browser')
 
@@ -445,7 +440,6 @@ class OneDriveShell:
       self.print_usage(sys.stderr)
       raise ValueError(message)
 
-  # TODO Enhance help command with arguments for each command
   # TODO Add aliases possibility
   # TODO Keep previous history when relaunching the shell
   # TODO Remember configuration in a file
