@@ -12,6 +12,7 @@ from lib._typing import Optional, Tuple
 from lib.graph_helper import MsGraphClient
 from lib.datetime_helper import utc_dt_from_str_ms_datetime, utc_dt_now
 from lib.strpathutil import StrPathUtil
+from threading import Lock
 
 lg = logging.getLogger('odc.msobject')
 
@@ -33,32 +34,64 @@ class MsObject(ABC):
     #   - mgc_response contains child count, size but not all children
     self.ms_id = ms_id  # id is a keyword in python
     self.__size = size
-    self.parent = parent
+    self.__parent = parent
     self.__name = name
     self.__parent_path = parent_path
     self.creation_datetime = cdt
     self.last_modified_datetime = lmdt
-    self.__is_root = is_root  # only used to compute path
+    self.is_root = is_root  # used to compute path
 
   @property
   def path(self):
-    return "" if self.__is_root else f"{self.__parent_path}/{self.__name}"
+    if self.__parent_path is None and self.parent is not None:
+      # No parent path where parent exists.
+      # Could be possible when new object has been detected without being
+      # created through the shell
+      if lg.level >= logging.DEBUG:
+        lg.debug(f"path is invoked for {self.__name} whereas parent path"
+                 f" does not exists. Create it")
+      self.__parent_path = self.parent.path
+    elif (lg.level >= logging.DEBUG
+          and self.__parent_path is None and self.parent is None):
+      lg.debug(f"path is invoked for {self.__name} whereas parent"
+               f"is None. An exception will be probably raised")
+    return "" if self.is_root else f"{self.__parent_path}/{self.__name}"
 
   @property
   def parent_path(self):
     return self.__parent_path
 
   @property
+  def parent(self):
+    return self.__parent
+
+  @property
   def name(self):
     return self.__name
+
+  @abstractmethod
+  def _change_name_in_parent(self, name):
+    pass
+
+  def set_name(self, new_name):
+    if self.name != new_name:
+      self._change_name_in_parent(new_name)
+      self.__name = new_name
 
   @property
   def size(self):
     return self.__size
 
+  def set_size(self, size):
+    self.__size = size
+
   @abstractmethod
   def str_full_details(self):
     pass
+
+  def update_parent(self, new_parent):
+    self.__parent = new_parent
+    self.__parent_path = self.parent.path
 
   @property
   def __isabstractmethod__(self):
@@ -78,7 +111,7 @@ class MsObject(ABC):
       current_parent.last_modified_datetime = lmdt
       current_parent = current_parent.parent
 
-    self.parent._remove_info_for_child(self)
+    self.parent.remove_info_for_child(self)
 
   @beartype
   def update_parent_after_arrival(self,
@@ -94,13 +127,13 @@ class MsObject(ABC):
       current_parent.__size += self.__size
       current_parent.last_modified_datetime = lmdt
       current_parent = current_parent.parent
-    new_parent._add_object_info(self)
+    new_parent.add_object_info(self)
 
   @beartype
   def move_object(self, new_parent: "MsFolderInfo",
                   lmdt: Optional[datetime.datetime] = None):
     self.update_parent_before_removal()
-    self.parent = new_parent
+    self.update_parent(new_parent)
     self.__parent_path = new_parent.path
     self.update_parent_after_arrival(new_parent, lmdt)
 
@@ -202,8 +235,20 @@ class MsFolderInfo(MsObject):
     self.__children_files_retrieval_status = None    # None,"partial" or "all"
     self.__children_folders_retrieval_status = None  # None, "partial" or "all"
 
+    self.__add_default_folder_info()
+
+  def update_parent(self, new_parent):
+    super().update_parent(new_parent)
+    self.__dict_children_folder[".."] = self.parent
+
+  def _change_name_in_parent(self, new_name):
+    if self.parent is not None:
+      if self.name in self.parent.__dict_children_folder:
+        self.parent.__dict_children_folder.pop(self.name)
+        self.parent.__dict_children_folder[new_name] = self
+
   @beartype
-  def _remove_info_for_child(self, child: MsObject):
+  def remove_info_for_child(self, child: MsObject):
     if isinstance(child, MsFolderInfo):
       self.children_folder.remove(child)
       self.__dict_children_folder.pop(child.name)
@@ -244,7 +289,6 @@ class MsFolderInfo(MsObject):
           self.__add_file_info_if_necessary(fi)
         # else:   - isFolder and folder already retrieved
 
-      self.__add_default_folder_info()
       lg.debug(
           f"[retrieve_children_info] {self.path} - setting retrieval status")
 
@@ -318,7 +362,7 @@ class MsFolderInfo(MsObject):
       self.__dict_children_folder[folder_info.name] = folder_info
 
   def __add_default_folder_info(self):
-    # add subfolder "." and "..""
+    # add subfolder "." and ".."
     self.__dict_children_folder["."] = self
     self.__dict_children_folder[".."] = self.parent
 
@@ -327,7 +371,7 @@ class MsFolderInfo(MsObject):
       self.children_file.append(file_info)
       self.__dict_children_file[file_info.name] = file_info
 
-  def _add_object_info(self, object_info: MsObject):
+  def add_object_info(self, object_info: MsObject):
     if isinstance(object_info, MsFolderInfo):
       self.__add_folder_info_if_necessary(object_info)
     else:  # isinstance(object_info, MsFileInfo)
@@ -474,6 +518,12 @@ class MsFileInfo(MsObject):
     return self.__id
   id = property(_get_id)
 
+  def _change_name_in_parent(self, new_name):
+    if self.parent is not None:
+      if self.name in self.parent._MsFolderInfo__dict_children_file:
+        self.parent._MsFolderInfo__dict_children_file.pop(self.name)
+        self.parent._MsFolderInfo__dict_children_file[new_name] = self
+
   def __str__(self):
     fname = f"{self.name}" if len(self.name) < 45 else f"{self.name[:40]}..."
     fmdt = self.last_modified_datetime.strftime("%Y-%m-%d %H:%M:%S")
@@ -497,6 +547,39 @@ class MsFileInfo(MsObject):
 
   def __repr__(self):
     return f"File({self.name})"
+
+
+class DictMsObject():
+  __dict_already_discovered_object = {}
+  __lock_dict = Lock()  # only used for removing object from dict which is unsafe (1)
+  # (1) https://superfastpython.com/thread-safe-dictionary-in-python/
+
+  @staticmethod
+  def get(ms_id) -> Optional[MsObject]:
+    with DictMsObject.__lock_dict:
+      if ms_id in DictMsObject.__dict_already_discovered_object:
+        result = DictMsObject.__dict_already_discovered_object[ms_id]
+      else:
+        result = None
+    return result
+
+  @staticmethod
+  def remove(ms_id):
+    with DictMsObject.__lock_dict:
+      DictMsObject.__dict_already_discovered_object.pop(ms_id)
+
+  @staticmethod
+  @beartype
+  def add_or_update(obj: MsObject):
+    if obj.ms_id in DictMsObject.__dict_already_discovered_object:
+      obj_dict = DictMsObject.__dict_already_discovered_object[obj.ms_id]
+      if isinstance(obj, MsFolderInfo):
+        ObjectInfoFactory.UpdateMsFolderInfo(obj_dict, obj)
+      else:
+        ObjectInfoFactory.UpdateMsFileInfo(obj_dict, obj)
+
+    else:
+      DictMsObject.__dict_already_discovered_object[obj.ms_id] = obj
 
 
 class ObjectInfoFactory:
@@ -533,11 +616,38 @@ class ObjectInfoFactory:
     return (None, mso)
 
   @staticmethod
+  def get_object_info_from_id(
+          mgc, ms_id, parent=None,
+          no_warn_if_no_parent=False,
+          no_update_of_global_dict=False) -> Tuple[object,  Optional[MsObject]]:
+    """
+      Return a 2-tuple (<error_code>, <object_info>).
+      If error_code is not None, object is None and error_code is set code of response sent by Msgraph.
+      Else, object_info is set with found object or None if nothing is found.
+    """
+    r = mgc.mgc.get(
+        f'{MsGraphClient.graph_url}/me/drive/items/{ms_id}').json()
+    if 'error' in r:
+      return (r['error']['code'], None)
+
+    if ('folder' in r):
+      # import pprint
+      # pprint.pprint(mgc_response_json)
+      mso = ObjectInfoFactory.MsFolderFromMgcResponse(
+          mgc, r, parent, no_warn_if_no_parent=no_warn_if_no_parent,
+          no_update_of_global_dict=no_update_of_global_dict)
+    else:
+      mso = ObjectInfoFactory.MsFileInfoFromMgcResponse(
+          mgc, r, parent, no_warn_if_no_parent=no_warn_if_no_parent,
+          no_update_of_global_dict=no_update_of_global_dict)
+    return (None, mso)
+
+  @staticmethod
   def MsFolderFromMgcResponse(
           mgc,
           mgc_response_json,
           parent=None,
-          no_warn_if_no_parent=False):
+          no_warn_if_no_parent=False, no_update_of_global_dict=False):
 
     # Workaround following what seems to be a bug. Space is replaced by "%20" sequence
     #   in mgc_response when parent name contains a space
@@ -558,11 +668,12 @@ class ObjectInfoFactory:
 
     # full_path = "" if "root" in mgc_response_json else
     # f"{parent_path}/{mgc_response_json['name']}"
+    ms_id = mgc_response_json['id']
     result = MsFolderInfo(
         parent_path=parent_path,
         name=mgc_response_json['name'],
         mgc=mgc,
-        id=mgc_response_json['id'],
+        id=ms_id,
         child_count=mgc_response_json['folder']['childCount'],
         size=mgc_response_json['size'],
         parent=parent,
@@ -573,14 +684,44 @@ class ObjectInfoFactory:
         is_root=is_root)
     if parent is not None:
       parent._MsFolderInfo__add_folder_info_if_necessary(result)
+
+    if not no_update_of_global_dict:
+      DictMsObject.add_or_update(result)
     return result
+
+  @staticmethod
+  @beartype
+  def UpdateMsFolderInfo(
+          fi_to_be_updated: MsFolderInfo,
+          fi_reference: MsFolderInfo,
+          update_child_count=True):
+    fi_to_be_updated.set_name(fi_reference.name)
+    fi_to_be_updated.set_size(fi_reference.size)
+
+    fi_to_be_updated.last_modified_datetime = fi_reference.last_modified_datetime
+    fi_to_be_updated.creation_datetime = fi_reference.creation_datetime
+    if update_child_count:
+      fi_to_be_updated.child_count = fi_reference.child_count
+
+  @staticmethod
+  @beartype
+  def UpdateMsFileInfo(
+          fi_to_be_updated: MsFileInfo,
+          fi_reference: MsFileInfo):
+    fi_to_be_updated.set_name(fi_reference.name)
+    fi_to_be_updated.set_size(fi_reference.size)
+
+    fi_to_be_updated.last_modified_datetime = fi_reference.last_modified_datetime
+    fi_to_be_updated.creation_datetime = fi_reference.creation_datetime
+    fi_to_be_updated.qxh = fi_reference.qxh
+    fi_to_be_updated.sha1hash = fi_reference.sha1hash
 
   @staticmethod
   def MsFileInfoFromMgcResponse(
           mgc,
           mgc_response_json,
           parent=None,
-          no_warn_if_no_parent=False):
+          no_warn_if_no_parent=False, no_update_of_global_dict=False):
     if parent is None and not no_warn_if_no_parent:
       lg.warning(
           "[MsFileFromMgcResponse]No parent folder to create a file info")
@@ -593,12 +734,12 @@ class ObjectInfoFactory:
              if 'quickXorHash' in mgc_hashes else None)
       sha1hash = (mgc_hashes['sha1Hash']
                   if 'sha1Hash' in mgc_hashes else None)
-
+    ms_id = mgc_response_json['id']
     result = MsFileInfo(
         mgc_response_json['name'],
         mgc_response_json['parentReference']['path'][13:],
         mgc,
-        mgc_response_json['id'], mgc_response_json['size'],
+        ms_id, mgc_response_json['size'],
         qxh, sha1hash,
         utc_dt_from_str_ms_datetime(
             mgc_response_json['createdDateTime']),
@@ -608,4 +749,7 @@ class ObjectInfoFactory:
 
     if parent is not None:
       parent._MsFolderInfo__add_file_info_if_necessary(result)
+
+    if not no_update_of_global_dict:
+      DictMsObject.add_or_update(result)
     return result

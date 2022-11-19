@@ -12,6 +12,8 @@ import sys
 import traceback
 from abc import ABC, abstractmethod
 from io import StringIO
+from pprint import pprint
+from threading import Event, Thread, Lock
 
 from beartype import beartype
 from colorama import Fore, Style
@@ -20,7 +22,7 @@ from colorama import init as cinit
 from lib._common import PROGRAM_NAME, get_versionned_name
 from lib._typing import List, Optional, Tuple
 from lib.graph_helper import MsGraphClient
-from lib.msobject_info import MsFileInfo, MsFolderInfo, MsObject
+from lib.msobject_info import DictMsObject, MsFileInfo, MsFolderInfo, MsObject
 from lib.msobject_info import ObjectInfoFactory as Oif
 from lib.msobject_info import StrPathUtil
 from lib.printer_helper import (ColumnsPrinter, FormattedString, alignleft,
@@ -364,7 +366,7 @@ class Completer:
    To avoid misunderstanding, only the folder name is displayed in the match list
   """
 
-  def __init__(self, odshell):
+  def __init__(self, odshell: "OneDriveShell"):
     self.shell = odshell
     self.values = []
     self.start_line = ""
@@ -403,17 +405,18 @@ class Completer:
     try:
 
       if state == 0:
-        parts_cmd = CommonCompleter.get_cmd_parts_with_quotation_guess(text)
-        if len(parts_cmd) > 0 and (parts_cmd[0] in self.shell.dict_cmds):
-          sub_completer = self.shell.dict_cmds[parts_cmd[0]].sub_completer
-          self.values = sub_completer.values(text)
+        with self.shell.global_lock:
+          parts_cmd = CommonCompleter.get_cmd_parts_with_quotation_guess(text)
+          if len(parts_cmd) > 0 and (parts_cmd[0] in self.shell.dict_cmds):
+            sub_completer = self.shell.dict_cmds[parts_cmd[0]].sub_completer
+            self.values = sub_completer.values(text)
 
-        elif len(parts_cmd) > 0 and parts_cmd[0][0] == "!":
-          sub_completer = SubCompleterLocalCommand()
-          self.values = sub_completer.values(text)
+          elif len(parts_cmd) > 0 and parts_cmd[0][0] == "!":
+            sub_completer = SubCompleterLocalCommand()
+            self.values = sub_completer.values(text)
 
-        else:
-          self.values = []
+          else:
+            self.values = []
 
       if state < len(self.values):
         self.__log_debug(f"  --> return {self.values[state]}")
@@ -423,6 +426,225 @@ class Completer:
 
     except Exception as e:
       print(f"[complete]Exception = {e}")
+
+
+class DeltaChecker():
+
+  def __init__(self, mgc: MsGraphClient):
+    self.mgc = mgc
+    query_string = (
+        f"{MsGraphClient.graph_url}/me/drive/root/delta?token=latest")
+    r = self.mgc.mgc.get(query_string)
+    self.delta_link = r.json()["@odata.deltaLink"]
+
+    self.items_to_be_process = []
+    self.lg = logging.getLogger("odc.browser.checkdelta")
+
+  def get_diffs(self):
+    query_string = self.delta_link
+    i = 0
+    while True:
+      r = self.mgc.mgc.get(query_string)
+      items_json = r.json()
+      current_items_list = items_json['value']
+      self.items_to_be_process += current_items_list
+      i = i+1
+      if "@odata.nextLink" in items_json:
+        query_string = items_json["@odata.nextLink"]
+      else:
+        break
+    self.delta_link = r.json()['@odata.deltaLink']
+
+  def __process_diff_delete(self, diff_item):
+    """
+      If object exists, remove from child list and from global dictionnary
+    """
+    msobj = DictMsObject.get(diff_item["id"])
+    if msobj is not None:
+      DictMsObject.remove(diff_item["id"])
+      self.lg.debug(f"Remove object '{msobj.path}' from dict")
+      msobj_parent = DictMsObject.get(diff_item["parentReference"]["id"])
+      # and isinstance(msobj_new_parent, MsFolderInfo):
+      if msobj_parent is not None:
+        msobj_parent.remove_info_for_child(msobj)
+
+  def __process_diff_file(self, diff_item):
+    """
+      Update file info related to diff_item only if it is already synchronized.
+      Create file info if parent exists.
+      Parent folder are not updated.
+      self.__new_parent_to_be_processed is updated
+    """
+    # diff_item MUST be a file file item
+
+    # 0 - Check that requisites are completed
+    if self.lg.level >= logging.DEBUG:
+      if "file" not in diff_item:
+        self.lg.debug("__process_diff_file is invoked with a non-file Item")
+
+    # 0.1 - Init
+    msobj = DictMsObject.get(diff_item["id"])
+
+    # 2 - Update new/updated items
+    fi_ref = Oif.MsFileInfoFromMgcResponse(
+        self.mgc, diff_item,
+        no_warn_if_no_parent=True, no_update_of_global_dict=True)
+
+    # 3 - Update file info if necessary and create it if parent exists
+    parent_id = diff_item["parentReference"]["id"]
+    msobj_new_parent = DictMsObject.get(parent_id)
+
+    if msobj is not None:
+      self.lg.debug(f"Known file has been updated - obj = {msobj.path}")
+      Oif.UpdateMsFileInfo(msobj, fi_ref)
+
+    if msobj is None and msobj_new_parent is not None:
+      self.lg.debug(f"Unknown file but parent exists."
+                    f"parent = {msobj_new_parent.path} ")
+      msobj = fi_ref
+      DictMsObject.add_or_update(msobj)
+
+    if msobj is not None:
+      self.__new_parentship_to_be_processed.append((msobj, msobj_new_parent))
+
+  def __process_diff_folder(self, diff_item):
+    """
+      Update folder info related to diff_item only if it is already synchronized.
+      Create folder info if parent exists.
+      self.__new_parent_to_be_processed is updated
+    """
+    # diff_item MUST be a file file item
+
+    # 0 - Check that requisites are completed
+    if self.lg.level >= logging.DEBUG:
+      if "folder" not in diff_item:
+        self.lg.debug(
+            "__process_diff_folder is invoked with a non-folder Item")
+
+    self.lg.debug(f"process folder '{diff_item['name']}'")
+    # 0.1 - Init
+    msobj = DictMsObject.get(diff_item["id"])
+
+    # 2 - Update new/updated items
+    fi_ref = Oif.get_object_info_from_id(
+        self.mgc, diff_item["id"], no_warn_if_no_parent=True,
+        no_update_of_global_dict=True)[1]
+
+    if fi_ref is None:
+      self.lg.warning(f"No folder object found '{diff_item['name']}'")
+      return
+
+    # 3 - Update file info if necessary and create it if parent exists
+    parent_id = diff_item["parentReference"]["id"]
+
+    msobj_new_parent = DictMsObject.get(parent_id)
+
+    if msobj is not None:
+      self.lg.debug(f"Known folder has been updated - obj = {msobj.path}")
+      Oif.UpdateMsFolderInfo(msobj, fi_ref)
+
+    if msobj is None and msobj_new_parent is not None:
+      self.lg.debug(f"Unknown folder but parent exists."
+                    f"parent = {msobj_new_parent.path}")
+      msobj = fi_ref
+      DictMsObject.add_or_update(msobj)
+
+    if msobj is not None:
+      self.__new_parentship_to_be_processed.append((msobj, msobj_new_parent))
+
+  @beartype
+  def __process_parentship(
+          self,
+          parentship_item: Tuple[MsObject, Optional[MsObject]]):
+
+    (msobj, new_parent) = parentship_item
+    self.lg.debug(f"process_parentship with obj {msobj.name}")
+    if new_parent is None:  # parent is not cached
+      # Remove object from previous item
+      if not msobj.is_root:
+        msobj.parent.remove_info_for_child(msobj)
+        DictMsObject.remove(msobj.ms_id)
+
+    elif msobj.parent is None:
+      msobj.update_parent(new_parent)
+      new_parent.add_object_info(msobj)
+
+    elif msobj.parent.ms_id != new_parent.ms_id:
+      msobj.parent.remove_info_for_child(msobj)
+      msobj.update_parent(new_parent)
+      new_parent.add_object_info(msobj)
+
+  def process_diffs(self):
+
+    deleted_item_to_be_process = list(
+        filter(lambda x: "deleted" in x, self.items_to_be_process))
+    folders_to_be_processed = list(
+        filter(lambda x: "folder" in x and "deleted" not in x,
+               self.items_to_be_process))
+    files_to_be_processed = list(
+        filter(lambda x: "file" in x and "deleted" not in x,
+               self.items_to_be_process))
+    # list of tuple of (msobj, new_parent_obj)
+    self.__new_parentship_to_be_processed = []
+    list(map(self.__process_diff_delete, deleted_item_to_be_process))
+    list(map(self.__process_diff_file, files_to_be_processed))
+    list(map(self.__process_diff_folder, folders_to_be_processed))
+    list(map(self.__process_parentship, self.__new_parentship_to_be_processed))
+    self.__new_parentship_to_be_processed = None
+
+  def print_last_diffs(self, with_total=False):
+    if with_total:
+      str_s = 's' if len(self.items_to_be_process) > 1 else ''
+      print(
+          f"{len(self.items_to_be_process)} detected diff{str_s}")
+    if len(self.items_to_be_process) > 0:
+      print()
+      list(map(self.__class__.__print_diff, self.items_to_be_process[-10:]))
+
+  def reinit(self):
+    self.items_to_be_process = []
+
+
+class ServerCheckDelta():
+
+  def __init__(self, mgc: MsGraphClient, lock_process: Lock):
+    self.counter = 0
+    self.to_be_stopped = Event()
+    self.is_stopped = Event()
+    self.mgc = mgc
+    self.lg = logging.getLogger("odc.browser.checkdelta")
+    self.dc = DeltaChecker(mgc)
+    self.__lock_process = lock_process
+
+  def loop(self):
+    while True:
+      self.lg.debug(f"start delta processing - {self.counter}")
+      try:
+        with self.__lock_process:
+          self.dc.get_diffs()
+          # self.dc.print_last_diffs()
+          if len(self.dc.items_to_be_process) > 0:
+            self.dc.process_diffs()
+      except Exception as e:
+        self.lg.error(f"Error during processing diff: {e}")
+        if self.lg.level >= logging.DEBUG:
+          error_line = "stack trace :\n"
+          for a in traceback.format_tb(e.__traceback__):  # Print traceback
+            error_line += f"  {a}"
+          self.lg.debug(error_line)
+      self.dc.reinit()
+      self.lg.debug(f"end delta processing - {self.counter}")
+
+      self.counter += 1
+      if self.to_be_stopped.wait(timeout=10):
+        break
+
+    self.lg.debug("loop is stopped")
+    self.is_stopped.set()
+
+  def stop(self):
+    self.to_be_stopped.set()
+    self.is_stopped.wait(timeout=5)
 
 
 class OneDriveShell:
@@ -476,6 +698,10 @@ class OneDriveShell:
     self.ls_formatter = LsFormatter(MsFileFormatter(45), MsFolderFormatter(45))
     self.cp = Completer(self)
     self.initiate_commands()
+    # Lock to ensure no simultaneousity of command launch, completion and
+    # delta checking
+    self.global_lock = Lock()
+    self.scd = ServerCheckDelta(self.mgc, self.global_lock)
 
   def initiate_commands(self):
 
@@ -679,6 +905,7 @@ class OneDriveShell:
         print("[rm]An error has occured")
         return False
       dst_obj.update_parent_before_removal()
+      DictMsObject.remove(dst_obj.ms_id)
       return True
 
     def action_pwd(self2, args):
@@ -804,8 +1031,16 @@ class OneDriveShell:
     result += "> "
     return result
 
-  def launch(self):
+  def launch_delta_server(self):
+    thread_scd = Thread(target=self.scd.loop, daemon=True)
+    thread_scd.daemon = True
+    thread_scd.start()
 
+  def stop_delta_server(self):
+    self.scd.stop()
+
+  def launch(self):
+    self.launch_delta_server()
     readline.parse_and_bind('tab: complete')
     readline.set_completer(self.cp.complete)
     if sys.platform != "win32":
@@ -840,7 +1075,8 @@ class OneDriveShell:
         args = []
         try:
           args = self.__args_parser.parse_args(parts_cmd)
-          self.dict_cmds[cmd].do_action(args)
+          with self.global_lock:
+            self.dict_cmds[cmd].do_action(args)
         except Exception as e:
           print(f"error: {e}")
           if lg.level >= logging.DEBUG:
@@ -916,6 +1152,8 @@ class OneDriveShell:
 
       else:
         print("unknown command")
+
+    self.stop_delta_server()
 
   def full_path_from_root_folder(self, str_path):
     """
