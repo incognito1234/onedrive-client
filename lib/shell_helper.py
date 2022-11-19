@@ -695,7 +695,7 @@ class OneDriveShell:
         mgc, "/", no_warn_if_no_parent=True)[1]
     self.current_fi = self.root_folder
     self.only_folders = False
-    self.ls_formatter = LsFormatter(MsFileFormatter(45), MsFolderFormatter(45))
+    self.ls_formatter = LsFormatter(MsFileFormatter(20), MsFolderFormatter(20))
     self.cp = Completer(self)
     self.initiate_commands()
     # Lock to ensure no simultaneousity of command launch, completion and
