@@ -9,6 +9,7 @@ import re
 import shlex
 import subprocess
 import sys
+import time
 import traceback
 from abc import ABC, abstractmethod
 from io import StringIO
@@ -607,6 +608,41 @@ class DeltaChecker():
 
 class ServerCheckDelta():
 
+  class EMA():
+    """
+    Exponential Moving Average related to ticks
+
+    It will be used to compute delay between two pulls
+    launched by the server. One tick will match with a OneDrive command.
+    """
+
+    def __init__(self, lg=None):
+      self.__last_tick = time.time()
+      self.__alpha = 0.3
+      self.__value = 15  # seconds
+      self.lg = lg
+
+    def tick(self):
+      old_last_tick = self.__last_tick
+      self.__last_tick = time.time()
+      delay_since_last_tick = self.__last_tick - old_last_tick
+      self.__value = (delay_since_last_tick * self.__alpha
+                      + self.__value * (1 - self.__alpha))
+
+    def value_if_ticked_now(self):
+      delay_since_last_tick = time.time() - self.__last_tick
+      result = (delay_since_last_tick * self.__alpha
+                + self.__value * (1 - self.__alpha))
+      if self.lg != None:
+        self.lg.debug(
+            f"delay_since_last_tick={delay_since_last_tick:.3f}"
+            f"- value={self.__value:.3f} - value_if_ticked_now={result:.3f}")
+      return result
+
+    @property
+    def value(self):
+      return self.__value
+
   def __init__(self, mgc: MsGraphClient, lock_process: Lock):
     self.counter = 0
     self.to_be_stopped = Event()
@@ -614,6 +650,13 @@ class ServerCheckDelta():
     self.mgc = mgc
     self.lg = logging.getLogger("odc.browser.checkdelta")
     self.dc = DeltaChecker(mgc)
+
+    self.__ema = self.__class__.EMA()
+    self.__min_wait_delay = 15  # seconds
+    self.__max_wait_delay = 5 * 60  # 5 minutes
+    self.__wait_delay = 20.0  # starting waiting delay
+    self.__coef_delay = 2  # new wait delay will be ema * coef
+
     self.__lock_process = lock_process
 
   def loop(self):
@@ -633,14 +676,32 @@ class ServerCheckDelta():
             error_line += f"  {a}"
           self.lg.debug(error_line)
       self.dc.reinit()
-      self.lg.debug(f"end delta processing - {self.counter}")
+      self.lg.debug(f"end delta processing - {self.counter}"
+                    f" - wait {self.__wait_delay:.1f} seconds")
 
       self.counter += 1
-      if self.to_be_stopped.wait(timeout=10):
+      if self.to_be_stopped.wait(timeout=self.__wait_delay):
         break
+
+      self.update_delay_with_ema_value(self.__ema.value_if_ticked_now())
 
     self.lg.debug("loop is stopped")
     self.is_stopped.set()
+
+  def tick(self):
+    self.__ema.tick()
+    self.update_delay_with_ema_value(self.__ema.value)
+
+  def update_delay_with_ema_value(self, ema_value):
+    theorical_delay = ema_value * self.__coef_delay
+    if theorical_delay < self.__min_wait_delay:
+      self.__wait_delay = self.__min_wait_delay
+    elif theorical_delay > self.__max_wait_delay:
+      self.__wait_delay = self.__max_wait_delay
+    else:
+      self.__wait_delay = theorical_delay
+    self.lg.debug(
+        f"new wait delay={self.__wait_delay:.1f} - ema_value={ema_value:.1f}")
 
   def stop(self):
     self.to_be_stopped.set()
@@ -1033,7 +1094,6 @@ class OneDriveShell:
 
   def launch_delta_server(self):
     thread_scd = Thread(target=self.scd.loop, daemon=True)
-    thread_scd.daemon = True
     thread_scd.start()
 
   def stop_delta_server(self):
@@ -1077,6 +1137,7 @@ class OneDriveShell:
           args = self.__args_parser.parse_args(parts_cmd)
           with self.global_lock:
             self.dict_cmds[cmd].do_action(args)
+          self.scd.tick()
         except Exception as e:
           print(f"error: {e}")
           if lg.level >= logging.DEBUG:
