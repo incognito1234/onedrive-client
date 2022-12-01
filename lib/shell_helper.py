@@ -593,15 +593,6 @@ class DeltaChecker():
     list(map(self.__process_parentship, self.__new_parentship_to_be_processed))
     self.__new_parentship_to_be_processed = None
 
-  def print_last_diffs(self, with_total=False):
-    if with_total:
-      str_s = 's' if len(self.items_to_be_process) > 1 else ''
-      print(
-          f"{len(self.items_to_be_process)} detected diff{str_s}")
-    if len(self.items_to_be_process) > 0:
-      print()
-      list(map(self.__class__.__print_diff, self.items_to_be_process[-10:]))
-
   def reinit(self):
     self.items_to_be_process = []
 
@@ -633,7 +624,7 @@ class ServerCheckDelta():
       delay_since_last_tick = time.time() - self.__last_tick
       result = (delay_since_last_tick * self.__alpha
                 + self.__value * (1 - self.__alpha))
-      if self.lg != None:
+      if self.lg is not None:
         self.lg.debug(
             f"delay_since_last_tick={delay_since_last_tick:.3f}"
             f"- value={self.__value:.3f} - value_if_ticked_now={result:.3f}")
