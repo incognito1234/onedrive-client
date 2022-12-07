@@ -1417,9 +1417,8 @@ class LsFormatter():
           with_pagination: bool = False,
           recursive: bool = False):
 
-    all_names = self.format_folder_children_lite(
+    str_to_be_printed = self.format_folder_children_lite(
         fi, only_folders, recursive, 1)
-    str_to_be_printed = '\n'.join(all_names)
     print_with_optional_paging(str_to_be_printed, with_pagination)
 
   @beartype
