@@ -1195,7 +1195,8 @@ class OneDriveShell:
 
       elif cmd == "license":
         try:
-          with open("LICENSE", "r") as f:
+          license_filename = f"{os.path.dirname(os.path.realpath(__file__))}{os.sep}..{os.sep}LICENSE"
+          with open(license_filename, "r") as f:
             l_content = f.read()
             print(l_content)
         except Exception:
