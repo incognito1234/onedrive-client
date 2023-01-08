@@ -33,7 +33,7 @@ def action_get_children(
       mgc, folder, no_warn_if_no_parent=True)[1]
   folder_info.retrieve_children_info(recursive=False, depth=0)
   ls_formatter = LsFormatter(MsFileFormatter(60), MsFolderFormatter(60), False)
-  ls_formatter.print_folder_children(
+  ls_formatter.print_folder_children_long(
       folder_info,
       only_folders=False,
       with_pagination=with_pagination)
@@ -44,12 +44,12 @@ def action_upload(
         mgc: MsGraphClient,
         remote_folder: str,
         src_file: str,
-        with_a_progress_bar: bool):
+        with_progress_bar: bool):
   # Upload a file
   mgc.put_file_content(
       remote_folder,
       src_file,
-      with_a_progress_bar
+      with_progress_bar=with_progress_bar
   )
 
 

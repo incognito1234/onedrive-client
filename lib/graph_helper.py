@@ -131,13 +131,18 @@ class MsGraphClient:
     result = self.mgc.get(f"{MsGraphClient.graph_url}{cmd}")
     return result
 
-  def put_file_content(self, dst_folder, src_file, with_progress_bar=True):
+  def put_file_content(
+          self,
+          dst_folder,
+          src_file,
+          dst_file=None,
+          with_progress_bar=True):
     lg.info(f"Start put_file_content('{dst_folder}','{src_file}')")
 
     dst_folder = StrPathUtil.remove_first_char_if_necessary(dst_folder, "/")
     total_size = os.path.getsize(src_file)
     lg.debug(f"File size = {total_size}")
-    file_name = src_file.split("/").pop()
+    file_name = dst_file if dst_file is not None else src_file.split("/").pop()
     # For file size < 4Mb
     if total_size < (1048576 * 4):
       url = '{0}/me/drive/root:/{1}/{2}:/content'.format(

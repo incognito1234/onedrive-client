@@ -1,31 +1,40 @@
 #  Copyright 2019-2022 Jareth Lomson <jareth.lomson@gmail.com>
 #  This file is part of OneDrive Client Program which is released under MIT License
 #  See file LICENSE for full license details
+import argparse
 import logging
-
-import math
 import os
 import re
-import argparse
-import subprocess
-from platform import platform
-from unittest import expectedFailure
-from colorama import Fore, Style, init as cinit
-from io import StringIO
-from abc import ABC, abstractmethod
-import sys
 import shlex
-import pydoc
+import subprocess
+import sys
+import time
+import traceback
 from abc import ABC, abstractmethod
-import re
-from lib._typing import List, Optional
-from beartype import beartype
+from io import StringIO
+from pprint import pprint
+from threading import Event, Thread, Lock
 
-from lib.graph_helper import MsGraphClient
-from lib.msobject_info import (
-    MsFileInfo, MsFolderInfo, MsObject,
-    ObjectInfoFactory as Oif, StrPathUtil)
+from beartype import beartype
+from colorama import Fore, Style
+from colorama import init as cinit
+
 from lib._common import PROGRAM_NAME, get_versionned_name
+from lib._typing import List, Optional, Tuple
+from lib.graph_helper import MsGraphClient
+from lib.msobject_info import DictMsObject, MsFileInfo, MsFolderInfo, MsObject
+from lib.msobject_info import ObjectInfoFactory as Oif
+from lib.msobject_info import StrPathUtil
+from lib.printer_helper import (ColumnsPrinter, FormattedString, alignleft,
+                                print_with_optional_paging)
+
+try:
+  import readline
+except ModuleNotFoundError as e:
+  print("It seems that you run this program from a Windows plateform.")
+  print("The pyreadline3 module is needed to run the shell")
+  print("Use command 'pip install pyreadline3' to use it")
+
 
 lg = logging.getLogger('odc.browser')
 
@@ -45,15 +54,19 @@ class CommonCompleter:
   def get_cmd_parts_with_quotation_guess(input):
     try:
       # WARNING: does not work with win32 if a backslash is included in input
-      return shlex.split(input)
+      result = shlex.split(input)
 
     except ValueError as e:
       try:
-        return shlex.split(input + "'")
+        result = shlex.split(input + "'")
 
       except ValueError as e:
-        return shlex.split(input + '"')
-  pass
+        result = shlex.split(input + '"')
+
+    if len(result) >= 1 and input[-1] == " " and result[-1][-1] != " ":
+      result.append("")
+
+    return result
 
   @staticmethod
   def extract_raw_last_args(input, parsed_last_arg):
@@ -142,7 +155,8 @@ class SubCompleterFileOrFolder(SubCompleter):
 
     if len(parts_cmd) > 1:
       last_arg = parts_cmd[-1]
-      was_relative_path = len(last_arg) > 0 and last_arg[0] != '/'
+      was_relative_path = len(
+          last_arg) > 0 and last_arg[0] != '/' or last_arg == ""
 
       # lfip = last_folder_info_path   -  rt = remaining test
       (lfip, rt) = MsObject.get_lastfolderinfo_path(
@@ -164,8 +178,12 @@ class SubCompleterFileOrFolder(SubCompleter):
     # Extract start of last arguments to be escaped if necessary. Other
     # arguments won't be changed
     if len(parts_cmd) > 1:
-      raw_last_arg = CommonCompleter.extract_raw_last_args(text, parts_cmd[-1])
-      start_line = text[:-(len(raw_last_arg))]
+      if parts_cmd[-1] != "":
+        raw_last_arg = CommonCompleter.extract_raw_last_args(
+            text, parts_cmd[-1])
+        start_line = text[:-(len(raw_last_arg))]
+      else:
+        start_line = text
     else:  # len(parts_cmd) == 1
       start_line = text.rstrip() + " "
 
@@ -201,15 +219,15 @@ class SubCompleterLocalCommand(SubCompleter):
   """
   RE_SPACE = re.compile('.*\\s+$', re.M)
 
-  def __init__(self):
+  def __init__(self, custom_command=None, first_exclamation_mark=True):
     super(self.__class__, self).__init__()
     self.builtins = None
-    self.commands = {
-        'foo': True,
-        'bar': False,
-    }
+    self.commands = {}
+    if custom_command is not None:
+      self.commands[custom_command] = True
     self.cmd_lookup = None
     self.path_lookup = None
+    self.__first_exclamation_mark = first_exclamation_mark
 
     # try to get shell builtins
     shell = os.environ.get('SHELL')
@@ -224,7 +242,6 @@ class SubCompleterLocalCommand(SubCompleter):
   def _generate(self, prefix):
     def begins_with(s): return s[:len(prefix)] == prefix
     self.cmd_lookup = {}
-    # lg.debug("Entering generate")
 
     # append commands in PATH
     for path in map(os.path.expanduser, os.environ.get('PATH', '').split(':')):
@@ -275,18 +292,27 @@ class SubCompleterLocalCommand(SubCompleter):
     "Generic readline completion entry point."
 
     try:
-      buffer = text[1:]  # remove first '!'
+      # remove first '!'
+      buffer = text[1:] if self.__first_exclamation_mark else text
       text_part = buffer.split()
       # account for last argument ending in a space
       if text_part and SubCompleterLocalCommand.RE_SPACE.match(buffer):
         text_part.append('')
 
+      if len(text_part) == 0:
+        return []
       last_arg = text_part[-1]
       # command completion
+      first_char = "!" if self.__first_exclamation_mark else ""
       if len(text_part) < 2:
         self._generate(last_arg)
         result = [c + ' ' for c in self.cmd_lookup.keys()]
-        return list(map(lambda x: SubCompleter.SCResult(f"!{x}", x), result))
+        return list(
+            map(
+                lambda x: SubCompleter.SCResult(
+                    f"{first_char}{x}",
+                    x),
+                result))
 
       else:
         # check if we should do path completion
@@ -301,12 +327,34 @@ class SubCompleterLocalCommand(SubCompleter):
         return list(
             map(
                 lambda x: SubCompleter.SCResult(
-                    f"!{start_line} {x}",
+                    f"{first_char}{start_line} {x}",
                     x),
                 result))
 
     except Exception as e:
       lg.error(f"[subCompleter shell]Error '{e}'")
+
+
+class SubCompleterMulti(SubCompleter):
+
+  @beartype
+  def __init__(self, ods: "OneDriveShell", custom_command: str):
+    super(self.__class__, self).__init__()
+    self.__sc_first_arg = SubCompleterLocalCommand(
+        custom_command=custom_command, first_exclamation_mark=False)
+    self.__sc_second_arg = SubCompleterFileOrFolder(ods, False)
+    self.lg_complete = logging.getLogger("odc.browser.completer")
+
+  @beartype
+  def values(self, text: str) -> List[SubCompleter.SCResult]:
+    parts_cmd = CommonCompleter.get_cmd_parts_with_quotation_guess(text)
+    self.lg_complete.debug(parts_cmd)
+    if ((text[-1] == " " and len(parts_cmd) == 1)
+            or (text[-1] != " " and len(parts_cmd) == 2)):
+      return self.__sc_first_arg.values(text)
+    elif ((text[-1] == " " and len(parts_cmd) == 2)
+          or (text[-1] != " " and len(parts_cmd) == 3)):
+      return self.__sc_second_arg.values(text)
 
 
 class SubCompleterNone(SubCompleter):
@@ -325,7 +373,7 @@ class Completer:
    To avoid misunderstanding, only the folder name is displayed in the match list
   """
 
-  def __init__(self, odshell):
+  def __init__(self, odshell: "OneDriveShell"):
     self.shell = odshell
     self.values = []
     self.start_line = ""
@@ -364,18 +412,18 @@ class Completer:
     try:
 
       if state == 0:
-        parts_cmd = CommonCompleter.get_cmd_parts_with_quotation_guess(text)
+        with self.shell.global_lock:
+          parts_cmd = CommonCompleter.get_cmd_parts_with_quotation_guess(text)
+          if len(parts_cmd) > 0 and (parts_cmd[0] in self.shell.dict_cmds):
+            sub_completer = self.shell.dict_cmds[parts_cmd[0]].sub_completer
+            self.values = sub_completer.values(text)
 
-        if len(parts_cmd) > 0 and (parts_cmd[0] in self.shell.dict_cmds):
-          sub_completer = self.shell.dict_cmds[parts_cmd[0]].sub_completer
-          self.values = sub_completer.values(text)
+          elif len(parts_cmd) > 0 and parts_cmd[0][0] == "!":
+            sub_completer = SubCompleterLocalCommand()
+            self.values = sub_completer.values(text)
 
-        elif len(parts_cmd) > 0 and parts_cmd[0][0] == "!":
-          sub_completer = SubCompleterLocalCommand()
-          self.values = sub_completer.values(text)
-
-        else:
-          self.values = []
+          else:
+            self.values = []
 
       if state < len(self.values):
         self.__log_debug(f"  --> return {self.values[state]}")
@@ -385,6 +433,276 @@ class Completer:
 
     except Exception as e:
       print(f"[complete]Exception = {e}")
+
+
+class DeltaChecker():
+
+  def __init__(self, mgc: MsGraphClient):
+    self.mgc = mgc
+    query_string = (
+        f"{MsGraphClient.graph_url}/me/drive/root/delta?token=latest")
+    r = self.mgc.mgc.get(query_string)
+    self.delta_link = r.json()["@odata.deltaLink"]
+
+    self.items_to_be_process = []
+    self.lg = logging.getLogger("odc.browser.checkdelta")
+
+  def get_diffs(self):
+    query_string = self.delta_link
+    i = 0
+    while True:
+      r = self.mgc.mgc.get(query_string)
+      items_json = r.json()
+      current_items_list = items_json['value']
+      self.items_to_be_process += current_items_list
+      i = i + 1
+      if "@odata.nextLink" in items_json:
+        query_string = items_json["@odata.nextLink"]
+      else:
+        break
+    self.delta_link = r.json()['@odata.deltaLink']
+
+  def __process_diff_delete(self, diff_item):
+    """
+      If object exists, remove from child list and from global dictionnary
+    """
+    msobj = DictMsObject.get(diff_item["id"])
+    if msobj is not None:
+      DictMsObject.remove(diff_item["id"])
+      self.lg.debug(f"Remove object '{msobj.path}' from dict")
+      msobj_parent = DictMsObject.get(diff_item["parentReference"]["id"])
+      # and isinstance(msobj_new_parent, MsFolderInfo):
+      if msobj_parent is not None:
+        msobj_parent.remove_info_for_child(msobj)
+
+  def __process_diff_file(self, diff_item):
+    """
+      Update file info related to diff_item only if it is already synchronized.
+      Create file info if parent exists.
+      Parent folder are not updated.
+      self.__new_parent_to_be_processed is updated
+    """
+    # diff_item MUST be a file file item
+
+    # 0 - Check that requisites are completed
+    if self.lg.level >= logging.DEBUG:
+      if "file" not in diff_item:
+        self.lg.debug("__process_diff_file is invoked with a non-file Item")
+
+    # 0.1 - Init
+    msobj = DictMsObject.get(diff_item["id"])
+
+    # 2 - Update new/updated items
+    fi_ref = Oif.MsFileInfoFromMgcResponse(
+        self.mgc, diff_item,
+        no_warn_if_no_parent=True, no_update_of_global_dict=True)
+
+    # 3 - Update file info if necessary and create it if parent exists
+    parent_id = diff_item["parentReference"]["id"]
+    msobj_new_parent = DictMsObject.get(parent_id)
+
+    if msobj is not None:
+      self.lg.debug(f"Known file has been updated - obj = {msobj.path}")
+      Oif.UpdateMsFileInfo(msobj, fi_ref)
+
+    if msobj is None and msobj_new_parent is not None:
+      self.lg.debug(f"Unknown file but parent exists."
+                    f"parent = {msobj_new_parent.path} ")
+      msobj = fi_ref
+      DictMsObject.add_or_update(msobj)
+
+    if msobj is not None:
+      self.__new_parentship_to_be_processed.append((msobj, msobj_new_parent))
+
+  def __process_diff_folder(self, diff_item):
+    """
+      Update folder info related to diff_item only if it is already synchronized.
+      Create folder info if parent exists.
+      self.__new_parent_to_be_processed is updated
+    """
+    # diff_item MUST be a file file item
+
+    # 0 - Check that requisites are completed
+    if self.lg.level >= logging.DEBUG:
+      if "folder" not in diff_item:
+        self.lg.debug(
+            "__process_diff_folder is invoked with a non-folder Item")
+
+    self.lg.debug(f"process folder '{diff_item['name']}'")
+    # 0.1 - Init
+    msobj = DictMsObject.get(diff_item["id"])
+
+    # 2 - Update new/updated items
+    fi_ref = Oif.get_object_info_from_id(
+        self.mgc, diff_item["id"], no_warn_if_no_parent=True,
+        no_update_of_global_dict=True)[1]
+
+    if fi_ref is None:
+      self.lg.warning(f"No folder object found '{diff_item['name']}'")
+      return
+
+    # 3 - Update file info if necessary and create it if parent exists
+    parent_id = diff_item["parentReference"]["id"]
+
+    msobj_new_parent = DictMsObject.get(parent_id)
+
+    if msobj is not None:
+      self.lg.debug(f"Known folder has been updated - obj = {msobj.path}")
+      Oif.UpdateMsFolderInfo(msobj, fi_ref)
+
+    if msobj is None and msobj_new_parent is not None:
+      self.lg.debug(f"Unknown folder but parent exists."
+                    f"parent = {msobj_new_parent.path}")
+      msobj = fi_ref
+      DictMsObject.add_or_update(msobj)
+
+    if msobj is not None:
+      self.__new_parentship_to_be_processed.append((msobj, msobj_new_parent))
+
+  @beartype
+  def __process_parentship(
+          self,
+          parentship_item: Tuple[MsObject, Optional[MsObject]]):
+
+    (msobj, new_parent) = parentship_item
+    self.lg.debug(f"process_parentship with obj {msobj.name}")
+    if new_parent is None:  # parent is not cached
+      # Remove object from previous item
+      if not msobj.is_root:
+        msobj.parent.remove_info_for_child(msobj)
+        DictMsObject.remove(msobj.ms_id)
+
+    elif msobj.parent is None:
+      msobj.update_parent(new_parent)
+      new_parent.add_object_info(msobj)
+
+    elif msobj.parent.ms_id != new_parent.ms_id:
+      msobj.parent.remove_info_for_child(msobj)
+      msobj.update_parent(new_parent)
+      new_parent.add_object_info(msobj)
+
+  def process_diffs(self):
+
+    deleted_item_to_be_process = list(
+        filter(lambda x: "deleted" in x, self.items_to_be_process))
+    folders_to_be_processed = list(
+        filter(lambda x: "folder" in x and "deleted" not in x,
+               self.items_to_be_process))
+    files_to_be_processed = list(
+        filter(lambda x: "file" in x and "deleted" not in x,
+               self.items_to_be_process))
+    # list of tuple of (msobj, new_parent_obj)
+    self.__new_parentship_to_be_processed = []
+    list(map(self.__process_diff_delete, deleted_item_to_be_process))
+    list(map(self.__process_diff_file, files_to_be_processed))
+    list(map(self.__process_diff_folder, folders_to_be_processed))
+    list(map(self.__process_parentship, self.__new_parentship_to_be_processed))
+    self.__new_parentship_to_be_processed = None
+
+  def reinit(self):
+    self.items_to_be_process = []
+
+
+class ServerCheckDelta():
+
+  class EMA():
+    """
+    Exponential Moving Average related to ticks
+
+    It will be used to compute delay between two pulls
+    launched by the server. One tick will match with a OneDrive command.
+    """
+
+    def __init__(self, lg=None):
+      self.__last_tick = time.time()
+      self.__alpha = 0.3
+      self.__value = 15  # seconds
+      self.lg = lg
+
+    def tick(self):
+      old_last_tick = self.__last_tick
+      self.__last_tick = time.time()
+      delay_since_last_tick = self.__last_tick - old_last_tick
+      self.__value = (delay_since_last_tick * self.__alpha
+                      + self.__value * (1 - self.__alpha))
+
+    def value_if_ticked_now(self):
+      delay_since_last_tick = time.time() - self.__last_tick
+      result = (delay_since_last_tick * self.__alpha
+                + self.__value * (1 - self.__alpha))
+      if self.lg is not None:
+        self.lg.debug(
+            f"delay_since_last_tick={delay_since_last_tick:.3f}"
+            f"- value={self.__value:.3f} - value_if_ticked_now={result:.3f}")
+      return result
+
+    @property
+    def value(self):
+      return self.__value
+
+  def __init__(self, mgc: MsGraphClient, lock_process: Lock):
+    self.counter = 0
+    self.to_be_stopped = Event()
+    self.is_stopped = Event()
+    self.mgc = mgc
+    self.lg = logging.getLogger("odc.browser.checkdelta")
+    self.dc = DeltaChecker(mgc)
+
+    self.__ema = self.__class__.EMA()
+    self.__min_wait_delay = 15  # seconds
+    self.__max_wait_delay = 5 * 60  # 5 minutes
+    self.__wait_delay = 20.0  # starting waiting delay
+    self.__coef_delay = 2  # new wait delay will be ema * coef
+
+    self.__lock_process = lock_process
+
+  def loop(self):
+    while True:
+      self.lg.debug(f"start delta processing - {self.counter}")
+      try:
+        with self.__lock_process:
+          self.dc.get_diffs()
+          # self.dc.print_last_diffs()
+          if len(self.dc.items_to_be_process) > 0:
+            self.dc.process_diffs()
+      except Exception as e:
+        self.lg.error(f"Error during processing diff: {e}")
+        if self.lg.level >= logging.DEBUG:
+          error_line = "stack trace :\n"
+          for a in traceback.format_tb(e.__traceback__):  # Print traceback
+            error_line += f"  {a}"
+          self.lg.debug(error_line)
+      self.dc.reinit()
+      self.lg.debug(f"end delta processing - {self.counter}"
+                    f" - wait {self.__wait_delay:.1f} seconds")
+
+      self.counter += 1
+      if self.to_be_stopped.wait(timeout=self.__wait_delay):
+        break
+
+      self.update_delay_with_ema_value(self.__ema.value_if_ticked_now())
+
+    self.lg.debug("loop is stopped")
+    self.is_stopped.set()
+
+  def tick(self):
+    self.__ema.tick()
+    self.update_delay_with_ema_value(self.__ema.value)
+
+  def update_delay_with_ema_value(self, ema_value):
+    theorical_delay = ema_value * self.__coef_delay
+    if theorical_delay < self.__min_wait_delay:
+      self.__wait_delay = self.__min_wait_delay
+    elif theorical_delay > self.__max_wait_delay:
+      self.__wait_delay = self.__max_wait_delay
+    else:
+      self.__wait_delay = theorical_delay
+    self.lg.debug(
+        f"new wait delay={self.__wait_delay:.1f} - ema_value={ema_value:.1f}")
+
+  def stop(self):
+    self.to_be_stopped.set()
+    self.is_stopped.wait(timeout=5)
 
 
 class OneDriveShell:
@@ -402,7 +720,6 @@ class OneDriveShell:
       self.print_usage(sys.stderr)
       raise ValueError(message)
 
-  # TODO Enhance help command with arguments for each command
   # TODO Add aliases possibility
   # TODO Keep previous history when relaunching the shell
   # TODO Remember configuration in a file
@@ -436,9 +753,13 @@ class OneDriveShell:
         mgc, "/", no_warn_if_no_parent=True)[1]
     self.current_fi = self.root_folder
     self.only_folders = False
-    self.ls_formatter = LsFormatter(MsFileFormatter(45), MsFolderFormatter(45))
+    self.ls_formatter = LsFormatter(MsFileFormatter(20), MsFolderFormatter(20))
     self.cp = Completer(self)
     self.initiate_commands()
+    # Lock to ensure no simultaneousity of command launch, completion and
+    # delta checking
+    self.global_lock = Lock()
+    self.scd = ServerCheckDelta(self.mgc, self.global_lock)
 
   def initiate_commands(self):
 
@@ -458,15 +779,45 @@ class OneDriveShell:
     def action_cd(self2, args):
       self.change_to_path(args.path)
 
-    def action_ll(self2, args):
-      self.ls_formatter.print_folder_children(
-          self.current_fi, start_number=1, only_folders=self.only_folders,
-          with_pagination=args.p)
-
     def action_ls(self2, args):
-      self.ls_formatter.print_folder_children_lite(
-          self.current_fi, only_folders=self.only_folders,
-          with_pagination=args.p)
+      errors = []
+      paths_to_be_listed = []
+
+      # Compute paths and errors
+      for path in args.path:
+        (lfip, rt_path) = MsObject.get_lastfolderinfo_path(
+            self.root_folder, path, self.current_fi)
+        if lfip is None:
+          errors.append(f"'{path}' not found")
+        else:
+          if lfip.relative_path_is_a_folder(rt_path, True):
+            paths_to_be_listed.append(lfip.get_child_folder(rt_path))
+          elif lfip.relative_path_is_a_file(rt_path, True):
+            errors.append(f"'{path}' is a file. No listing available.")
+          else:
+            errors.append(f"'{path}' not found.")
+
+      # Print errors
+      list(map(lambda x: print(x), errors))
+
+      # Print paths
+      lines_to_be_printed = []
+      for fi in paths_to_be_listed:
+        if len(paths_to_be_listed) > 1:
+          lines_to_be_printed.append("")
+          lines_to_be_printed.append(f"{fi.path}/:")
+        str_folder_children = (
+            self.ls_formatter.format_folder_children_lite(
+                fi,
+                only_folders=self.only_folders,
+                recursive=args.r,
+                depth=args.d) if not args.l else self.ls_formatter.format_folder_children_long(
+                fi, only_folders=self.only_folders,
+                recursive=args.r, depth=args.d))
+
+        lines_to_be_printed.append(str_folder_children)
+      str_to_be_printed = '\n'.join(lines_to_be_printed)
+      print_with_optional_paging(str_to_be_printed, args.p)
 
     def action_lls(self2, args):
       self.ls_formatter.print_folder_children_lite_next(
@@ -490,6 +841,43 @@ class OneDriveShell:
       else:
         print(f"{file_name} is not a file of current folder({self.current_fi.path})")
 
+    def action_put(self2, args):
+
+      src_filename = os.path.split(args.srcfile)[1]
+
+      # Compute dst_folder_path and dst_filename
+      (lfip_dst, rt_dst) = MsObject.get_lastfolderinfo_path(
+          self.root_folder, args.dstpath, self.current_fi)
+
+      if lfip_dst is None:
+        print("destination folder not found")
+        return False
+      if lfip_dst.relative_path_is_a_folder(rt_dst, True):
+
+        dst_parent = lfip_dst.get_child_folder(rt_dst)
+        if dst_parent.relative_path_is_a_file(src_filename):
+          print(f"{dst_parent.path}/{src_filename} already exists."
+                f" Remove it before upload")
+          return False
+        dst_folder_path = os.path.normpath(dst_parent.path)
+        dst_filename = src_filename
+
+      elif lfip_dst.relative_path_is_a_file(rt_dst, True):
+        print(f"{rt_dst} is a file. Remove it before upload.")
+        return False
+      else:
+        dst_parent = lfip_dst
+        dst_folder_path = os.path.normpath(lfip_dst.path)
+        dst_filename = rt_dst
+
+      self.mgc.put_file_content(dst_folder_path, args.srcfile, dst_filename)
+
+      msoi_new_file = Oif.get_object_info(
+          self.mgc, f"{dst_folder_path}/{dst_filename}", parent=dst_parent)[1]
+      msoi_new_file.update_parent_after_arrival(
+          dst_parent, msoi_new_file.last_modified_datetime)
+      return True
+
     def action_mv(self2, args):
       # lfip = last_folder_info_path
       # rt = remaining_text
@@ -497,6 +885,9 @@ class OneDriveShell:
       # Compute source path
       (lfip_src, rt_src) = MsObject.get_lastfolderinfo_path(
           self.root_folder, args.srcpath, self.current_fi)
+      if lfip_src is None:
+        print("source folder not found")
+        return False
       if lfip_src.relative_path_is_a_file(rt_src, True):
         src_obj = lfip_src.get_child_file(rt_src)
       elif lfip_src.relative_path_is_a_folder(rt_src, True):
@@ -508,6 +899,9 @@ class OneDriveShell:
       # Compute dest path
       (lfip_dst, rt_dst) = MsObject.get_lastfolderinfo_path(
           self.root_folder, args.dstpath, self.current_fi)
+      if lfip_dst is None:
+        print("source folder not found")
+        return False
       if lfip_dst.relative_path_is_a_folder(rt_dst, True):
         is_a_renaming = False
         dst_parent = lfip_dst.get_child_folder(rt_dst)
@@ -532,6 +926,27 @@ class OneDriveShell:
       src_obj.move_object(dst_parent)
       return True
 
+    def action_mkdir(self2, args):
+
+      # Compute dest path
+      (lfip_dst, rt_dst) = MsObject.get_lastfolderinfo_path(
+          self.root_folder, args.dstpath, self.current_fi)
+      if lfip_dst is None:
+        print("destination folder not found")
+        return False
+      if lfip_dst.relative_path_is_a_folder(rt_dst, True):
+        dst_parent = lfip_dst.get_child_folder(rt_dst)
+        folder_name = rt_dst
+      elif lfip_dst.relative_path_is_a_file(rt_dst, True):
+        print(f"'{args.dstpath} exists and is a file.")
+        return False
+      else:
+        dst_parent = lfip_dst
+        folder_name = rt_dst
+
+      msoi_newfolder = dst_parent.create_empty_subfolder(folder_name)
+      return msoi_newfolder is not None
+
     def action_rm(self2, args):
       (lfip_dst, rt_dst) = MsObject.get_lastfolderinfo_path(
           self.root_folder, args.dstpath, self.current_fi)
@@ -548,6 +963,7 @@ class OneDriveShell:
         print("[rm]An error has occured")
         return False
       dst_obj.update_parent_before_removal()
+      DictMsObject.remove(dst_obj.ms_id)
       return True
 
     def action_pwd(self2, args):
@@ -565,14 +981,6 @@ class OneDriveShell:
     sub_parser = myparser.add_subparsers(dest='cmd')
     sp_cd = sub_parser.add_parser('cd', description='Change directory')
     sp_cd.add_argument('path', type=str, help='Destination path')
-
-    sp_ll = sub_parser.add_parser(
-        'll', description='List current folder with details')
-    sp_ll.add_argument(
-        '-p',
-        action='store_true',
-        default=False,
-        help='Enable pagination')
     sp_ls = sub_parser.add_parser(
         'ls', description='List current folder by column')
     sp_ls.add_argument(
@@ -580,6 +988,28 @@ class OneDriveShell:
         action='store_true',
         default=False,
         help='Enable pagination')
+    sp_ls.add_argument(
+        '-l',
+        action='store_true',
+        default=False,
+        help='Add details to file and folders'
+    )
+    sp_ls.add_argument(
+        '-r',
+        action='store_true',
+        default=False,
+        help='Recursive listing')
+    sp_ls.add_argument(
+        '-d',
+        type=int,
+        default=1,
+        help='Recursing depth (Default=1)')
+    sp_ls.add_argument(
+        'path',
+        type=str,
+        help='Path of folder',
+        nargs='*',
+        default='.')
     sp_lls = sub_parser.add_parser(
         'lls', description='Continue listing folder in case of large folder')
     sp_pwd = sub_parser.add_parser(
@@ -587,6 +1017,10 @@ class OneDriveShell:
     sp_get = sub_parser.add_parser(
         'get', description='Download file in current folder')
     sp_get.add_argument('remotepath', type=str, help='remote file')
+    sp_put = sub_parser.add_parser(
+        'put', description='Upload a file')
+    sp_put.add_argument('srcfile', type=str, help='source file')
+    sp_put.add_argument('dstpath', type=str, help='destination path')
     sp_rm = sub_parser.add_parser(
         'rm', description='Remove a file or a folder')
     sp_rm.add_argument(
@@ -608,6 +1042,8 @@ class OneDriveShell:
     sp_stat = sub_parser.add_parser(
         'stat', description='Get info about object')
     sp_stat.add_argument('remotepath', type=str, help='destination object')
+    sp_mkdir = sub_parser.add_parser('mkdir', description='Make a folder')
+    sp_mkdir.add_argument('dstpath', type=str, help='path of new folder')
     sp_l_cd = sub_parser.add_parser('!cd', description="Change local folder")
     sp_l_cd.add_argument('path', type=str, help='Destination path')
 
@@ -617,44 +1053,22 @@ class OneDriveShell:
 
     # Populate commands
     self.dict_cmds = {}
-    add_new_cmd(
-        'cd',
-        sp_cd,
-        action_cd,
-        SubCompleterFileOrFolder(
-            self,
-            only_folder=True))
-    add_new_cmd('ll', sp_ll, action_ll, SubCompleterNone())
-    add_new_cmd('ls', sp_ls, action_ls, SubCompleterNone())
+    add_new_cmd('cd', sp_cd, action_cd, SubCompleterFileOrFolder(
+        self, only_folder=True))
+    add_new_cmd('ls', sp_ls, action_ls, SubCompleterFileOrFolder(
+        self, only_folder=True))
     add_new_cmd('lls', sp_lls, action_lls, SubCompleterNone())
-    add_new_cmd(
-        'stat',
-        sp_stat,
-        action_stat,
-        SubCompleterFileOrFolder(
-            self,
-            only_folder=False))
-    add_new_cmd(
-        'get',
-        sp_get,
-        action_get,
-        SubCompleterFileOrFolder(
-            self,
-            only_folder=False))
-    add_new_cmd(
-        'mv',
-        sp_mv,
-        action_mv,
-        SubCompleterFileOrFolder(
-            self,
-            only_folder=False))
-    add_new_cmd(
-        'rm',
-        sp_rm,
-        action_rm,
-        SubCompleterFileOrFolder(
-            self,
-            only_folder=False))
+    add_new_cmd('stat', sp_stat, action_stat, SubCompleterFileOrFolder(
+        self, only_folder=False))
+    add_new_cmd('mkdir', sp_mkdir, action_mkdir, SubCompleterFileOrFolder(
+        self, only_folder=True))
+    add_new_cmd('get', sp_get, action_get, SubCompleterFileOrFolder(
+        self, only_folder=False))
+    add_new_cmd('put', sp_put, action_put, SubCompleterMulti(self, 'put'))
+    add_new_cmd('mv', sp_mv, action_mv, SubCompleterFileOrFolder(
+        self, only_folder=False))
+    add_new_cmd('rm', sp_rm, action_rm, SubCompleterFileOrFolder(
+        self, only_folder=False))
     add_new_cmd('pwd', sp_pwd, action_pwd, SubCompleterNone())
     # For any strange reason, cd does not work as common 'os.system'
     add_new_cmd('!cd', sp_l_cd, action_l_cd, SubCompleterLocalCommand())
@@ -675,8 +1089,15 @@ class OneDriveShell:
     result += "> "
     return result
 
-  def launch(self):
+  def launch_delta_server(self):
+    thread_scd = Thread(target=self.scd.loop, daemon=True)
+    thread_scd.start()
 
+  def stop_delta_server(self):
+    self.scd.stop()
+
+  def launch(self):
+    self.launch_delta_server()
     readline.parse_and_bind('tab: complete')
     readline.set_completer(self.cp.complete)
     if sys.platform != "win32":
@@ -711,17 +1132,17 @@ class OneDriveShell:
         args = []
         try:
           args = self.__args_parser.parse_args(parts_cmd)
-          self.dict_cmds[cmd].do_action(args)
+          with self.global_lock:
+            self.dict_cmds[cmd].do_action(args)
+          self.scd.tick()
         except Exception as e:
           print(f"error: {e}")
-
-      elif cmd.isdigit() and int(cmd) <= len(self.current_fi.children_folder):
-
-        int_input = int(cmd)
-        if int_input == 0:
-          self.change_current_folder_to_parent()
-        else:
-          self.current_fi = self.current_fi.children_folder[int(my_input) - 1]
+          if lg.level >= logging.DEBUG:
+            lg.error(f"Shell error: {e} - Command = {cmd}")
+            error_line = "stack trace :\n"
+            for a in traceback.format_tb(e.__traceback__):  # Print traceback
+              error_line += f"  {a}"
+            lg.debug(error_line)
 
       elif cmd[0] == "!":
         os.system(my_raw_input[1:])
@@ -755,7 +1176,6 @@ class OneDriveShell:
           for (k, v) in self.dict_cmds.items():
             print(f"  {k:20}{v.argp.description}")
 
-          print(f"  {'<number>':20}Browse to folder <number>")
           print(f"  {'!<shell_command>':20}Launch local shell command")
           print(f"  {'set':20}Set a variable")
           print()
@@ -781,7 +1201,8 @@ class OneDriveShell:
 
       elif cmd == "license":
         try:
-          with open("LICENSE", "r") as f:
+          license_filename = f"{os.path.dirname(os.path.realpath(__file__))}{os.sep}..{os.sep}LICENSE"
+          with open(license_filename, "r") as f:
             l_content = f.read()
             print(l_content)
         except Exception:
@@ -790,6 +1211,8 @@ class OneDriveShell:
 
       else:
         print("unknown command")
+
+    self.stop_delta_server()
 
   def full_path_from_root_folder(self, str_path):
     """
@@ -813,45 +1236,6 @@ class OneDriveShell:
       self.current_fi = self.root_folder.get_child_folder(full_path)
 
 
-class FormattedString():
-  """
-    Class to manage difference between String that is printed and String
-    that is stored.
-    Usefull when String are colorized or stylished because some specific
-    non-printable characters are used.
-  """
-
-  def __init__(self, str_to_be_printed, str_raw, len_to_be_printed):
-    self.to_be_printed = str_to_be_printed
-    self.raw = str_raw
-    self.len_to_be_printed = len_to_be_printed
-
-  @staticmethod
-  @beartype
-  def build_from_string(what: str):
-    return FormattedString(what, what, len(what))
-
-  @staticmethod
-  @beartype
-  def build_from_colorized_string(what: str, raw_what: str):
-    return FormattedString(what, raw_what, len(raw_what))
-
-  @staticmethod
-  def concat(*args):
-    result = FormattedString("", "", 0)
-    for s in args:
-      if isinstance(s, str):
-        result.to_be_printed += s
-        result.raw += s
-        result.len_to_be_printed += len(s)
-      elif isinstance(s, FormattedString):
-        result.to_be_printed += s.to_be_printed
-        result.raw += s.to_be_printed
-        result.len_to_be_printed += s.len_to_be_printed
-
-    return result
-
-
 class InfoFormatter(ABC):
 
   @abstractmethod
@@ -861,20 +1245,6 @@ class InfoFormatter(ABC):
   @abstractmethod
   def format_lite(self, what):
     return "default"
-
-  @staticmethod
-  @beartype
-  def alignright(printable_what: FormattedString, nb: int, fillchar=" "):
-    return FormattedString.build_from_colorized_string(
-        f"{(fillchar * (nb - printable_what.len_to_be_printed))}{printable_what.to_be_printed}",
-        f"{(fillchar * (nb - printable_what.len_to_be_printed))}{printable_what.raw}")
-
-  @staticmethod
-  @beartype
-  def alignleft(printable_what: FormattedString, nb: int, fillchar=" "):
-    return FormattedString.build_from_colorized_string(
-        f"{printable_what.to_be_printed}{(fillchar * (nb - printable_what.len_to_be_printed))}",
-        f"{printable_what.raw}{(fillchar * (nb - printable_what.len_to_be_printed))}")
 
 
 class MsFolderFormatter(InfoFormatter):
@@ -899,10 +1269,10 @@ class MsFolderFormatter(InfoFormatter):
 
     result = FormattedString.concat(
         f"{what.size:>12}  {fmdt}  ",
-        InfoFormatter.alignleft(
+        alignleft(
             fname,
             self.max_name_size),
-        f"{what.child_count:>6}  {status_subfolders}{status_subfiles}")
+        f"{what.child_count:>6}  {status_subfolders}{status_subfiles}").rstrip()
     return result
 
   @beartype
@@ -923,9 +1293,9 @@ class MsFileFormatter(InfoFormatter):
     fmdt = what.last_modified_datetime.strftime("%b %d %H:%M")
     result = FormattedString.concat(
         f"{what.size:>12}  {fmdt}  ",
-        InfoFormatter.alignleft(
+        alignleft(
             FormattedString.build_from_string(fname),
-            self.max_name_size))
+            self.max_name_size)).rstrip()
     return result
 
   @beartype
@@ -934,9 +1304,6 @@ class MsFileFormatter(InfoFormatter):
 
 
 class LsFormatter():
-
-  # 'R' to keep colors - 'X' to keep the screen - 'F' no paging if one screen
-  PAGER_COMMAND = 'less -R -X -F'
 
   @beartype
   def __init__(
@@ -950,75 +1317,116 @@ class LsFormatter():
     self.include_number = include_number
 
   @beartype
-  def print_folder_children(
+  def __format_folder_children(
+          self,
+          fi: MsFolderInfo,
+          with_columns: bool,
+          folder_desc_formatter,
+          file_desc_formatter,
+          only_folders: bool = True,
+          recursive: bool = False,
+          depth: int = 999,
+          is_first_folder: bool = False) -> str:
+    # A header with the folder path is added to each children
+    # The same header is added if is_first_folder is True
+
+    lg.debug(
+        f"Entering __format_folder_children_lite({fi.path},"
+        f"{only_folders}, {recursive}, {depth})")
+    if ((not fi.folders_retrieval_has_started() and only_folders)
+            or (not fi.files_retrieval_has_started() and not only_folders)):
+      fi.retrieve_children_info(only_folders=only_folders)
+
+    folder_names = map(folder_desc_formatter, fi.children_folder)
+    if not only_folders:
+      file_names = map(file_desc_formatter, fi.children_file)
+    else:
+      file_names = []
+    all_names = list(folder_names) + list(file_names)
+
+    if with_columns:
+      result = self.column_printer.format_with_columns(all_names)
+    else:
+      result = '\n'.join(list(map(lambda x: x.to_be_printed, all_names)))
+
+    if recursive and depth > 0 and len(fi.children_folder) > 0:
+      if is_first_folder:
+        result = f"{fi.path}/:\n" + result
+
+      result += "\n"
+
+      for child_folder in fi.children_folder:
+        result += f"\n{child_folder.path}/:\n"
+        result += self.__format_folder_children(
+            child_folder,
+            with_columns,
+            folder_desc_formatter,
+            file_desc_formatter,
+            only_folders,
+            True,
+            depth - 1,
+            is_first_folder=False)
+        result += "\n"
+
+      result = result[:-1]
+    return result
+
+  @beartype
+  def format_folder_children_long(
+          self,
+          fi: MsFolderInfo,
+          recursive: bool = False,
+          only_folders: bool = True,
+          depth: int = 999) -> str:
+    return self.__format_folder_children(
+        fi, False,
+        self.folder_formatter.format, self.file_formatter.format,
+        only_folders, recursive,
+        depth, True
+    )
+
+  @beartype
+  def print_folder_children_long(
           self,
           fi: MsFolderInfo,
           start_number: int = 0,
           recursive: bool = False,
           only_folders: bool = True,
           depth: int = 999,
-          with_pagination: bool = False):
+          with_pagination: bool = False) -> None:
+    str_to_be_printed = self.format_folder_children_long(
+        fi, start_number, recursive, only_folders, depth)
+    print_with_optional_paging(str_to_be_printed, with_pagination)
 
-    if ((not fi.folders_retrieval_has_started() and only_folders)
-            or (not fi.files_retrieval_has_started() and not only_folders)):
-      fi.retrieve_children_info(
-          only_folders=only_folders,
-          recursive=recursive,
-          depth=depth)
+  @beartype
+  def format_folder_children_lite(
+          self,
+          fi: MsFolderInfo,
+          only_folders: bool = True,
+          recursive: bool = False,
+          depth: int = 999) -> str:
+    lg.debug(
+        f"Entering format_folder_children_lite({fi.path},"
+        f"{only_folders}, {recursive}, {depth})")
 
-    str_to_be_printed = ""
-    i = start_number
-    for c in fi.children_folder:
-      prefix_number = f"{i:>3} " if self.include_number else ""
-      str_to_be_printed += (
-          f"{FormattedString.concat(prefix_number, self.folder_formatter.format(c)).to_be_printed.rstrip()}"
-          "\n")
+    result = self.__format_folder_children(
+        fi, True,
+        self.folder_formatter.format_lite, self.file_formatter.format_lite,
+        only_folders, recursive, depth, is_first_folder=True)
 
-      i = i + 1
-    if not only_folders:
-      for c in fi.children_file:
-        prefix_number = f"{i:>3} " if self.include_number else ""
-        str_to_be_printed += (
-            f"{FormattedString.concat(prefix_number, self.file_formatter.format(c)).to_be_printed.rstrip()}"
-            "\n")
-        i = i + 1
-    str_to_be_printed = str_to_be_printed[:-1]  # remove last carriage return
-
-    if with_pagination:
-      pydoc.pipepager(str_to_be_printed, cmd=LsFormatter.PAGER_COMMAND)
-    else:
-      print(str_to_be_printed)
-
-    # FIXME Recursive folder printing does not work (print_children does not
-    # exist anymore)
-    if recursive and depth > 0:
-      for c in fi.children_folder:
-        nb_children = c.print_children(
-            start_number=i, recursive=False, depth=depth - 1)
-
-        i += nb_children
-
-    return i - start_number
+    return result
 
   @beartype
   def print_folder_children_lite(
           self,
           fi: MsFolderInfo,
           only_folders: bool = True,
-          with_pagination: bool = False):
+          with_pagination: bool = False,
+          recursive: bool = False):
 
-    if ((not fi.folders_retrieval_has_started() and only_folders)
-            or (not fi.files_retrieval_has_started() and not only_folders)):
-      fi.retrieve_children_info(only_folders=only_folders)
-
-    folder_names = map(
-        lambda x: self.folder_formatter.format_lite(x),
-        fi.children_folder)
-    file_names = map(
-        lambda x: self.file_formatter.format_lite(x),
-        fi.children_file)
-    all_names = list(folder_names) + list(file_names)
-    self.column_printer.print_with_columns(all_names, with_pagination)
+    str_to_be_printed = self.format_folder_children_lite(
+        fi, only_folders, recursive, 1)
+    print_with_optional_paging(str_to_be_printed, with_pagination)
 
   @beartype
   def print_folder_children_lite_next(
@@ -1028,102 +1436,3 @@ class LsFormatter():
       fi.retrieve_children_info_next(only_folders=only_folders)
 
     self.print_folder_children_lite(fi, only_folders)
-
-
-class ColumnsPrinter():
-
-  def __init__(self, sbc):
-    self.sbc = sbc  # space between column
-
-  def is_printable(self, max_len_line, elts, nb_columns):
-    # elts = list of FormattedString
-    nb_elts = len(elts)
-    nb_lines = 1 + math.floor((len(elts) - 1) / nb_columns)
-
-    column_sizes = [0] * nb_columns
-    w = 0
-    for i in range(0, nb_lines):
-      elt = elts[i]
-      c = 0
-      if elt.len_to_be_printed > column_sizes[c]:
-        column_sizes[c] = elt.len_to_be_printed
-      w = column_sizes[0]
-
-      for j in range(i + nb_lines, nb_elts, nb_lines):
-        elt = elts[j]
-        c += 1
-        if elt.len_to_be_printed > column_sizes[c]:
-          column_sizes[c] = elt.len_to_be_printed
-        w += self.sbc + column_sizes[c]
-
-      for d in range(c + 1, nb_columns):
-        w += self.sbc + column_sizes[d]
-
-      if w > max_len_line:
-        return False
-
-    return True
-
-  def column_sizes(self, elts, nb_columns):
-    # elts = list of FormattedString
-    nb_elts = len(elts)
-    nb_lines = 1 + math.floor((len(elts) - 1) / nb_columns)
-    column_sizes = [0] * nb_columns
-    for i in range(0, nb_lines):
-      elt = elts[i]
-      w = elt.len_to_be_printed
-      c = 0
-      if w > column_sizes[c]:
-        column_sizes[c] = w
-
-      for j in range(i + nb_lines, nb_elts, nb_lines):
-        c += 1
-        elt = elts[j]
-        if elt.len_to_be_printed > column_sizes[c]:
-          column_sizes[c] = elt.len_to_be_printed
-        w += self.sbc + column_sizes[c]
-
-    return column_sizes
-
-  def nb_columns(self, elts):
-    # elts = list of FormattedString
-    low = 1
-    high = 10
-    while high - low > 1:
-      mid = round((low + high) / 2)
-      ans = self.is_printable(os.get_terminal_size().columns, elts, mid)
-      if ans:
-        low = mid
-      else:
-        high = mid
-    if self.is_printable(os.get_terminal_size().columns, elts, high):
-      return high
-    else:
-      return low
-
-  def print_with_columns(self, what, with_pagination=False):
-    # what : list of FormattedString to be printed
-    if len(what) == 0:
-      return
-    nbc = self.nb_columns(what)
-    cs = self.column_sizes(what, nbc)
-    nb_lines = 1 + math.floor((len(what) - 1) / nbc)
-    str_to_be_printed = ""
-    for i in range(0, nb_lines):
-      k = 0
-      new_line = InfoFormatter.alignleft(what[i], cs[k])
-      for j in range(i + nb_lines, len(what), nb_lines):
-        k += 1
-        new_line = FormattedString.concat(
-            new_line,
-            " " * self.sbc,
-            InfoFormatter.alignleft(
-                what[j],
-                cs[k]))
-      str_to_be_printed += new_line.to_be_printed.rstrip() + "\n"
-    # remove trailing carriage return
-    str_to_be_printed = str_to_be_printed[:-1]
-    if with_pagination:
-      pydoc.pipepager(str_to_be_printed, cmd=LsFormatter.PAGER_COMMAND)
-    else:
-      print(str_to_be_printed)
