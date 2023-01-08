@@ -449,7 +449,7 @@ class DeltaChecker():
       items_json = r.json()
       current_items_list = items_json['value']
       self.items_to_be_process += current_items_list
-      i = i+1
+      i = i + 1
       if "@odata.nextLink" in items_json:
         query_string = items_json["@odata.nextLink"]
       else:
@@ -1266,7 +1266,7 @@ class MsFolderFormatter(InfoFormatter):
         alignleft(
             fname,
             self.max_name_size),
-        f"{what.child_count:>6}  {status_subfolders}{status_subfiles}")
+        f"{what.child_count:>6}  {status_subfolders}{status_subfiles}").rstrip()
     return result
 
   @beartype
@@ -1289,7 +1289,7 @@ class MsFileFormatter(InfoFormatter):
         f"{what.size:>12}  {fmdt}  ",
         alignleft(
             FormattedString.build_from_string(fname),
-            self.max_name_size))
+            self.max_name_size)).rstrip()
     return result
 
   @beartype

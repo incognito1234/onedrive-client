@@ -19,10 +19,22 @@ class FormattedString():
     non-printable characters are used.
   """
 
-  def __init__(self, str_to_be_printed, str_raw, len_to_be_printed):
+  def __init__(
+          self,
+          str_to_be_printed: str,
+          str_raw: str,
+          len_to_be_printed: int):
     self.to_be_printed = str_to_be_printed
     self.raw = str_raw
     self.len_to_be_printed = len_to_be_printed
+
+  def rstrip(self) -> "FormattedString":
+    new_raw = self.raw.rstrip()
+    result = FormattedString(
+        self.to_be_printed.rstrip(),
+        new_raw,
+        len(new_raw))
+    return result
 
   @staticmethod
   @beartype
@@ -37,7 +49,7 @@ class FormattedString():
     return FormattedString(what, raw_what, len(raw_what))
 
   @staticmethod
-  def concat(*args):
+  def concat(*args) -> "FormattedString":
     result = FormattedString("", "", 0)
     for s in args:
       if isinstance(s, str):
