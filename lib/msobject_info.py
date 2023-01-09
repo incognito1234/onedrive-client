@@ -271,6 +271,10 @@ class MsFolderInfo(MsObject):
 
       (ms_response, next_link) = self.__mgc.get_ms_response_for_children_folder_path(
           self.path, only_folders)
+
+      if ms_response is None:  # Can occurs if folder has change name
+        return
+
       self.next_link_children = next_link
 
       for c in ms_response:

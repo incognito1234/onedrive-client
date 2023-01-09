@@ -77,16 +77,18 @@ class MsGraphClient:
       param_urls = ()
 
     ms_response = self.mgc.get(link, params=param_urls)
+    ms_response_json = ms_response.json()
 
-    if 'error' in ms_response:
-      return None
+    if 'error' in ms_response_json:
+      return (None, None)
     else:
-      if "@odata.nextLink" in ms_response.json():
-        next_link = ms_response.json()["@odata.nextLink"]
+      if "@odata.nextLink" in ms_response_json:
+        next_link = ms_response_json["@odata.nextLink"]
       else:
         next_link = None
 
-    return (ms_response.json()['value'], next_link)
+    return (ms_response_json['value'], next_link)
+
 
   def download_file_content(self, dst_path, local_dst):
     # Inspired from https://gist.github.com/mvpotter/9088499

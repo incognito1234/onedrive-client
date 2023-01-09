@@ -1052,7 +1052,7 @@ class OneDriveShell:
     self.__args_parser = myparser
 
     # Populate commands
-    self.dict_cmds = {}
+    self.dict_cmds:dict[str,OneDriveShell.Command] = {}
     add_new_cmd('cd', sp_cd, action_cd, SubCompleterFileOrFolder(
         self, only_folder=True))
     add_new_cmd('ls', sp_ls, action_ls, SubCompleterFileOrFolder(
