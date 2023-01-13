@@ -77,31 +77,69 @@ class MsGraphClient:
       param_urls = ()
 
     ms_response = self.mgc.get(link, params=param_urls)
-    ms_response_json = ms_response.json()
 
-    if 'error' in ms_response_json:
-      return (None, None)
+    if 'error' in ms_response:
+      return None
     else:
-      if "@odata.nextLink" in ms_response_json:
-        next_link = ms_response_json["@odata.nextLink"]
+      if "@odata.nextLink" in ms_response.json():
+        next_link = ms_response.json()["@odata.nextLink"]
       else:
         next_link = None
 
-    return (ms_response_json['value'], next_link)
+    return (ms_response.json()['value'], next_link)
 
+  def download_file_content(
+          self,
+          dst_path,
+          local_dst,
+          retry_if_throttled=False, max_retry=5):
+    """
+      Try to download file 'dst_path' in folder 'local_dst'
+      If local_dst is a folder, the file will be downloaded with
+      the same filename. Else, it will be name of the downloaded file.
 
-  def download_file_content(self, dst_path, local_dst):
+      Return 1 if download is sucessfull. 0 else.
+
+    """
     # Inspired from https://gist.github.com/mvpotter/9088499
-
-    r = self.mgc.get(
-        f"{MsGraphClient.graph_url}/me/drive/root:/{dst_path}:/content",
-        stream=True)
-
     if os.path.isdir(local_dst):
       file_name = dst_path.split("/").pop()
       local_filepath = f"{local_dst}/{file_name}"
     else:
       local_filepath = local_dst
+
+    download_url = f"{MsGraphClient.graph_url}/me/drive/root:/{dst_path}:/content"
+
+    nb_retry = 0
+    while True:
+      nb_retry += 1
+      r = self.mgc.get(download_url, stream=True)
+      if r.ok:
+        break
+
+      # Manage Errors
+      if (not r.ok and
+          (r.status_code != 429
+           or not retry_if_throttled)):  # 429 = TooManyRequests
+        lg.error(
+            f"Error during processing of try_download_file_content({dst_path}) - "
+            f"{r.reason} (error {r.status_code})")
+        return 0
+
+      # From here status_code == 429 and retry_if_throttled is True
+      if nb_retry >= max_retry:
+        lg.error(
+            f"Error during processing of try_download_file_content({dst_path}) -"
+            "Max retry has been reached. Stop function.")
+        return 0
+
+      h_retry_after = (
+          r.headers["Retry-After"] if "Retry-After" in r.headers else 11)
+      lg.warn(
+          f"Warn during processing of try_download_file_content({dst_path}) -"
+          f"Client application has been throttled. Wait for "
+          f"{h_retry_after} seconds - Retry nb = {nb_retry}")
+      time.sleep(h_retry_after)
 
     CHUNK_SIZE = 1048576 * 20  # 20 MB
     start = 0

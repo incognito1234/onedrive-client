@@ -61,7 +61,10 @@ def mdownload_folder(
     if file_needs_download(file_info, dest_path):
       lg.info(
           f"[mdownload_folder] download '{file_info.path}' in '{dest_path}'")
-      mgc.download_file_content(file_info.path, dest_path)
+      mgc.download_file_content(
+          file_info.path,
+          dest_path,
+          retry_if_throttled=True)
     else:
       lg.debug(
           f"[mdownload_folder] no need to download '{file_info.path}'"
