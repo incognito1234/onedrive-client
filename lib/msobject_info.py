@@ -6,6 +6,7 @@ import logging
 import math
 import os
 import sys
+import urllib.parse
 from abc import ABC, abstractmethod
 from beartype import beartype
 from lib._typing import Optional, Tuple
@@ -623,7 +624,7 @@ class ObjectInfoFactory:
   def get_object_info_from_id(
           mgc, ms_id, parent=None,
           no_warn_if_no_parent=False,
-          no_update_of_global_dict=False) -> Tuple[object,  Optional[MsObject]]:
+          no_update_of_global_dict=False) -> Tuple[object, Optional[MsObject]]:
     """
       Return a 2-tuple (<error_code>, <object_info>).
       If error_code is not None, object is None and error_code is set code of response sent by Msgraph.
@@ -664,7 +665,8 @@ class ObjectInfoFactory:
             "[MsFolderFromMgcResponse]No parent folder to create a folder info")
       if 'parentReference' in mgc_response_json and 'path' in mgc_response_json[
               'parentReference']:
-        parent_path = mgc_response_json['parentReference']['path'][12:]
+        parent_path = urllib.parse.unquote(
+            mgc_response_json['parentReference']['path'][12:])
         is_root = False
       else:
         parent_path = ""
@@ -741,7 +743,7 @@ class ObjectInfoFactory:
     ms_id = mgc_response_json['id']
     result = MsFileInfo(
         mgc_response_json['name'],
-        mgc_response_json['parentReference']['path'][13:],
+        urllib.parse.unquote(mgc_response_json['parentReference']['path'][13:]),
         mgc,
         ms_id, mgc_response_json['size'],
         qxh, sha1hash,
