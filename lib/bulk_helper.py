@@ -10,6 +10,12 @@ from lib.graph_helper import MsGraphClient
 from lib.msobject_info import (
     ObjectInfoFactory, MsFolderInfo, MsFileInfo)
 
+try:
+  from tqdm import tqdm
+except Exception:
+  tqdm = None
+
+
 lg = logging.getLogger('odc.bulk')
 qxh = quickxorhash()
 
@@ -45,7 +51,8 @@ def mdownload_folder(
         mgc: MsGraphClient,
         ms_folder: MsFolderInfo,
         dest_path: str,
-        depth: int = 999):
+        depth: int = 999,
+        list_tqdm: list = []):
   if os.path.exists(dest_path) and not os.path.isdir(dest_path):
     lg.error(
         f"[mdownload_folder] {dest_path} exists and is not a folder"
@@ -56,6 +63,19 @@ def mdownload_folder(
     lg.info(
         f"[mdownload_folder] {dest_path} does not exists - create it")
     os.mkdir(dest_path)
+
+  if tqdm is not None:
+    n_tqdm = tqdm(
+        desc=ms_folder.name,
+        total=ms_folder.size,
+        unit="B",
+        unit_scale=True,
+        unit_divisor=1024,
+        colour="green" if len(list_tqdm) == 0 else "",
+        position=len(list_tqdm),
+        leave=len(list_tqdm) == 0)
+
+    list_tqdm.append(n_tqdm)
 
   for file_info in ms_folder.children_file:
     if file_needs_download(file_info, dest_path):
@@ -70,10 +90,23 @@ def mdownload_folder(
           f"[mdownload_folder] no need to download '{file_info.path}'"
           f" in '{dest_path}'")
 
+    if tqdm is not None:
+      for i in range(len(list_tqdm) - 1, -1, -1):
+        t = list_tqdm[i]
+        t.update(file_info.size)
+
   if depth > 1:
     for cf in ms_folder.children_folder:
       mdownload_folder(
-          mgc, cf, f"{dest_path}/{cf.name}", depth - 1)
+          mgc, cf, f"{dest_path}/{cf.name}", depth - 1, list_tqdm)
+
+      # last_tqdm.close()
+      # time.sleep(2)
+
+  if tqdm is not None:
+    last_tqdm = list_tqdm[-1]
+    last_tqdm.close()
+    list_tqdm.pop()
 
   return True
 
