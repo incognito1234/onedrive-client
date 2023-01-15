@@ -92,7 +92,8 @@ class MsGraphClient:
           self,
           dst_path,
           local_dst,
-          retry_if_throttled=False, max_retry=5):
+          retry_if_throttled=False, max_retry=5,
+          list_tqdm: list = []):
     """
       Try to download file 'dst_path' in folder 'local_dst'
       If local_dst is a folder, the file will be downloaded with
@@ -102,8 +103,8 @@ class MsGraphClient:
 
     """
     # Inspired from https://gist.github.com/mvpotter/9088499
+    file_name = dst_path.split("/").pop()
     if os.path.isdir(local_dst):
-      file_name = dst_path.split("/").pop()
       local_filepath = f"{local_dst}/{file_name}"
     else:
       local_filepath = local_dst
@@ -141,8 +142,27 @@ class MsGraphClient:
           f"{h_retry_after} seconds - Retry nb = {nb_retry}")
       time.sleep(h_retry_after)
 
+    # A tqdm will be initiated if content length is greater than 100 Mb
+    if (
+            tqdm is not None
+            and 'Content-Length' in r.headers
+            and int(r.headers['Content-Length']) > 100 * 1048576):
+      n_tqdm = tqdm(
+          desc=file_name,
+          total=int(r.headers['Content-Length']),
+          unit="B",
+          unit_scale=True,
+          unit_divisor=1024,
+          colour="green" if len(list_tqdm) == 0 else "",
+          position=len(list_tqdm),
+          leave=len(list_tqdm) == 0)
+      list_tqdm.append(n_tqdm)
+    else:
+      n_tqdm = None
+
     CHUNK_SIZE = 1048576 * 20  # 20 MB
     start = 0
+
     with open(local_filepath, 'wb') as f:
       for chunk in r.iter_content(chunk_size=CHUNK_SIZE):
         if chunk:  # filter out keep-alive new chunks
@@ -150,9 +170,15 @@ class MsGraphClient:
               f"[download_file_content] Downloading {dst_path} from {start}")
           f.write(chunk)
           f.flush()
-          start = start + CHUNK_SIZE
+          start = start + len(chunk)
+          for t in list_tqdm:
+            t.update(len(chunk))
     lg.info(
         f"[download_file_content] Download of file '{dst_path }' to '{local_dst}' - OK")
+
+    if n_tqdm is not None:
+      list_tqdm.pop()
+      n_tqdm.close()
 
     return 1
 

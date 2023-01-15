@@ -84,16 +84,16 @@ def mdownload_folder(
       mgc.download_file_content(
           file_info.path,
           dest_path,
-          retry_if_throttled=True)
+          retry_if_throttled=True, list_tqdm=list_tqdm)
     else:
       lg.debug(
           f"[mdownload_folder] no need to download '{file_info.path}'"
           f" in '{dest_path}'")
 
-    if tqdm is not None:
-      for i in range(len(list_tqdm) - 1, -1, -1):
-        t = list_tqdm[i]
-        t.update(file_info.size)
+      if tqdm is not None:
+        for i in range(len(list_tqdm) - 1, -1, -1):
+          t = list_tqdm[i]
+          t.update(file_info.size)
 
   if depth > 1:
     for cf in ms_folder.children_folder:
