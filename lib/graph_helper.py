@@ -167,14 +167,14 @@ class MsGraphClient:
       for chunk in r.iter_content(chunk_size=CHUNK_SIZE):
         if chunk:  # filter out keep-alive new chunks
           lg.info(
-              f"[download_file_content] Downloading {dst_path} from {start}")
+              f"[download_file_content] Downloading {file_name} from {start}")
           f.write(chunk)
           f.flush()
           start = start + len(chunk)
           for t in list_tqdm:
             t.update(len(chunk))
     lg.info(
-        f"[download_file_content] Download of file '{dst_path }' to '{local_dst}' - OK")
+        f"[download_file_content] Download of file '{file_name}' to '{local_dst}' - OK")
 
     if n_tqdm is not None:
       list_tqdm.pop()
