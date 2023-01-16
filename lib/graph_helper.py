@@ -134,24 +134,24 @@ class MsGraphClient:
             "Max retry has been reached. Stop function.")
         return 0
 
-      h_retry_after = (
-          int(r.headers["Retry-After"]) if "Retry-After" in r.headers else 11)
-      h_rate_limit_limit = (
-          int(r.headers["RateLimit-Limit"]) if "RateLimit-Limit" in r.headers else "")
-      h_rate_limit_remaining = (
-          int(
-              r.headers["RateLimit-Remaining"]) if "RateLimit-Remaining" in r.headers else "")
-      h_rate_limit_reset = (
-          int(r.headers["RateLimit-Reset"]) if "RateLimit-Reset" in r.headers else "")
+      header_params = {}
+      for p in (
+          "Retry-After",
+              "RateLimit-Limit", "RateLimit-Remaining", "RateLimit-Reset"):
+        header_params[p] = int(r.headers[p]) if p in r.headers else ""
+      if header_params["Retry-After"] == "":
+        header_params["Retry-After"] = 11
+
       lg.warn(
           f"Warn during processing of download_file_content({dst_path}) -"
           f"Client application has been throttled"
           f" (error code = {r.status_code}). Wait for "
-          f"{h_retry_after} seconds - Retry nb = {nb_retry} "
-          f" - RateLimit-limit = {h_rate_limit_limit}"
-          f" - RateLimit-Remaining = {h_rate_limit_remaining}"
-          f" - RateLimit-Reset = {h_rate_limit_reset}")
-      time.sleep(h_retry_after)
+          f"{header_params['Retry-After']} seconds - Retry nb = {nb_retry} "
+          f" - RateLimit-Limit = {header_params['RateLimit-Limit']}"
+          f" - RateLimit-Remaining = {header_params['RateLimit-Remaining']}"
+          f" - RateLimit-Reset = {header_params['RateLimit-Reset']}"
+          f" - Headers = {r.headers}")
+      time.sleep(header_params["Retry-After"])
 
     # A tqdm will be initiated if content length is greater than 100 Mb
     if (
