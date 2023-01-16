@@ -119,15 +119,15 @@ class MsGraphClient:
         break
 
       # Manage Errors
-      if (not r.ok and
-          (r.status_code != 429
-           or not retry_if_throttled)):  # 429 = TooManyRequests
+      if (r.status_code not in (429, 503) or not retry_if_throttled):
+        # 429 = TooManyRequests - 503 = Service Unavailable
         lg.error(
-            f"Error during processing of try_download_file_content({dst_path}) - "
+            f"Error during processing of download_file_content({dst_path}) - "
             f"{r.reason} (error {r.status_code})")
         return 0
 
-      # From here status_code == 429 and retry_if_throttled is True
+      # From here status_code in (429, 503) and retry_if_throttled is True
+      # https://learn.microsoft.com/en-US/sharepoint/dev/general-development/how-to-avoid-getting-throttled-or-blocked-in-sharepoint-online
       if nb_retry >= max_retry:
         lg.error(
             f"Error during processing of try_download_file_content({dst_path}) -"
@@ -135,11 +135,22 @@ class MsGraphClient:
         return 0
 
       h_retry_after = (
-          r.headers["Retry-After"] if "Retry-After" in r.headers else 11)
+          int(r.headers["Retry-After"]) if "Retry-After" in r.headers else 11)
+      h_rate_limit_limit = (
+          int(r.headers["RateLimit-Limit"]) if "RateLimit-Limit" in r.headers else "")
+      h_rate_limit_remaining = (
+          int(
+              r.headers["RateLimit-Remaining"]) if "RateLimit-Remaining" in r.headers else "")
+      h_rate_limit_reset = (
+          int(r.headers["RateLimit-Reset"]) if "RateLimit-Reset" in r.headers else "")
       lg.warn(
-          f"Warn during processing of try_download_file_content({dst_path}) -"
-          f"Client application has been throttled. Wait for "
-          f"{h_retry_after} seconds - Retry nb = {nb_retry}")
+          f"Warn during processing of download_file_content({dst_path}) -"
+          f"Client application has been throttled"
+          f" (error code = {r.status_code}). Wait for "
+          f"{h_retry_after} seconds - Retry nb = {nb_retry} "
+          f" - RateLimit-limit = {h_rate_limit_limit}"
+          f" - RateLimit-Remaining = {h_rate_limit_remaining}"
+          f" - RateLimit-Reset = {h_rate_limit_reset}")
       time.sleep(h_retry_after)
 
     # A tqdm will be initiated if content length is greater than 100 Mb
