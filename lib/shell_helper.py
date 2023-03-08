@@ -1380,13 +1380,12 @@ class LsFormatter():
   def print_folder_children_long(
           self,
           fi: MsFolderInfo,
-          start_number: int = 0,
           recursive: bool = False,
           only_folders: bool = True,
           depth: int = 999,
           with_pagination: bool = False) -> None:
     str_to_be_printed = self.format_folder_children_long(
-        fi, start_number, recursive, only_folders, depth)
+        fi, recursive, only_folders, depth)
     print_with_optional_paging(str_to_be_printed, with_pagination)
 
   @beartype
