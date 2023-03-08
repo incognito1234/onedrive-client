@@ -75,6 +75,11 @@ def parse_odc_args(default_action):
       action="store_true",
       default=False,
       help='enable pagination')
+  parser_get_children.add_argument(
+      '-l',
+      action="store_true",
+      default=False,
+      help='long format')
   parser_get_children.set_defaults(command="ls")
 
   parser_browse = sub_parsers.add_parser(

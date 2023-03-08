@@ -27,16 +27,22 @@ def action_get_user(mgc):
 def action_get_children(
         mgc: MsGraphClient,
         folder: str,
-        with_pagination: bool):
+        with_pagination: bool,
+        long_format: bool):
   # TODO Make column sizes adaptative
   folder_info = ObjectInfoFactory.get_object_info(
       mgc, folder, no_warn_if_no_parent=True)[1]
   folder_info.retrieve_children_info(recursive=False, depth=0)
   ls_formatter = LsFormatter(MsFileFormatter(60), MsFolderFormatter(60), False)
-  ls_formatter.print_folder_children_long(
-      folder_info,
-      only_folders=False,
-      with_pagination=with_pagination)
+  if long_format:
+    ls_formatter.print_folder_children_long(
+        folder_info,
+        only_folders=False,
+        with_pagination=with_pagination)
+  else:
+    ls_formatter.print_folder_children_lite(folder_info,
+        only_folders=False,
+        with_pagination=with_pagination)
 
 
 @beartype
