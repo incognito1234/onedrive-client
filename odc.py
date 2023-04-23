@@ -29,14 +29,13 @@ from os.path import exists
 
 def configure_logging(args):
 
+  FORMAT_LOG = "%(asctime)-15s %(name)s [%(levelname)s] %(message)s"
   if exists(
           f"{os.path.dirname(os.path.realpath(__file__))}{os.sep}logging_config.py"):
     import logging_config
 
   else:
     # Default config
-
-    FORMAT_LOG = "%(asctime)-15s %(name)s [%(levelname)s] %(message)s"
     logging.basicConfig(format=FORMAT_LOG)
 
     lg = logging.getLogger('odc')
