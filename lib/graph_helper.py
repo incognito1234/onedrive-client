@@ -88,6 +88,18 @@ class MsGraphClient:
 
     return (ms_response.json()['value'], next_link)
 
+  def __tqdm_timer(self,sec: int, pos: int):
+      t = tqdm(
+              desc=f'Server is throttled - Wait {sec}s ',
+              total=sec,
+              bar_format='{desc}: {elapsed} ({percentage:2.0f}%)',
+              position=pos,
+              leave=False)
+      st = time.time()
+      for i in range(sec):
+          time.sleep(1)
+          t.update(1)
+
   def download_file_content(
           self,
           dst_path,
@@ -151,7 +163,11 @@ class MsGraphClient:
           f" - RateLimit-Remaining = {header_params['RateLimit-Remaining']}"
           f" - RateLimit-Reset = {header_params['RateLimit-Reset']}"
           f" - Headers = {r.headers}")
-      time.sleep(header_params["Retry-After"])
+
+      if tqdm is not None:
+        self.__tqdm_timer(header_params["Retry-After"], len(list_tqdm))
+      else:
+        time.sleep(header_params["Retry-After"])
 
     # A tqdm will be initiated if content length is greater than 100 Mb
     if (
@@ -207,6 +223,7 @@ class MsGraphClient:
   def raw_command(self, cmd):
     result = self.mgc.get(f"{MsGraphClient.graph_url}{cmd}")
     return result
+
 
   def put_file_content(
           self,
