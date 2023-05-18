@@ -31,7 +31,7 @@ from lib.printer_helper import (ColumnsPrinter, FormattedString, alignleft,
 try:
   import readline
 except ModuleNotFoundError as e:
-  print("It seems that you run this program from a Windows plateform.")
+  print("It seems that you run this program from a Windows platform.")
   print("The pyreadline3 module is needed to run the shell")
   print("Use command 'pip install pyreadline3' to use it")
 
@@ -41,7 +41,7 @@ lg = logging.getLogger('odc.browser')
 try:
   import readline
 except ModuleNotFoundError as e:
-  print("It seems that you run this program from a Windows plateform.")
+  print("It seems that you run this program from a Windows platform.")
   print("The pyreadline3 module is needed to run the shell")
   print("Use command 'pip install pyreadline3' to use it")
 
