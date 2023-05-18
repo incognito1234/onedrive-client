@@ -80,7 +80,7 @@ Differential uploading and downloading (`mput` and `mget` comands) are available
       $ . ../bin/activate
       $ pip -r requirements.txt
 
-- On Windows plateform, import the package pyreadline3
+- On Windows platform, import the package pyreadline3
 
       $ pip install pyreadline3
 
