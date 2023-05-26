@@ -22,15 +22,19 @@ The following commands are available:
 
 `python odc.py` with no arguments launch the interactive shell. On linux platform, it includes a completion feature which recognizes remote files and folders.
 
-`put` command includes the uploading of large file with a retry mechanism in case a chunk is not correctly uploaded.
+`put`/`get` command lines includes the uploading/downloading of large file with a retry mechanism in case a chunk is not correctly uploaded/downloaded.
 
-Parameters are described in help output
+A progress bar is optionnally available for downloading and uploading large file if the `tqdm` package is installed.
+
+`mget` and `get` commands includes a server throttling detection mechanism: if a throttling message is received, a timer is triggered until the server becomes available. In the case you plan to download large file or folder, it is recommended to install the `tqdm` package so that you can see the remaining time which may be significantly long (more than one hour).
+
+Parameters of each command are described in help output
 
     $ python odc.py <command> -h
 
 ## ODC in action
 
-<img src="https://user-images.githubusercontent.com/7875007/211276237-f8e77085-e745-4ada-ba3e-e643393bfee9.gif" alt="ScreenCast ODC" width="80%">
+<img src="https://user-images.githubusercontent.com/7875007/211276237-f8e77085-e745-4ada-ba3e-e643393bfee9.gif" alt="ScreenCast ODC" width="100%">
 
 
 The screencast above demonstrates the following features:
@@ -80,7 +84,11 @@ Differential uploading and downloading (`mput` and `mget` comands) are available
       $ . ../bin/activate
       $ pip -r requirements.txt
 
-- On Windows platform, import the package pyreadline3
+- If you want to have progress bar during upload or downloading, install `tqdm` package
+
+      $ pip install tqdm
+
+- On Windows platform, import the package `pyreadline3`
 
       $ pip install pyreadline3
 
@@ -113,6 +121,12 @@ Differential uploading and downloading (`mput` and `mget` comands) are available
 
 ## Changelog
 _Only main changes are listed here_
+
+### Version 1.2
+- Consider error when downloading file with re-try mechanisms
+- Manage server throttling during download
+- Add progression bar (with tqdm package) during downloading
+- Add -l option for ls command
 
 ### Version 1.1
 - Detect external changes when shell runs
