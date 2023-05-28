@@ -20,13 +20,13 @@ The following commands are available:
     rm                Remove a file or a folder
     mkdir             Make a folder
 
-`python odc.py` with no arguments launch the interactive shell. On linux platform, it includes a completion feature which recognizes remote files and folders.
+`python odc.py` with no argument launchs the interactive shell. On linux platform, it includes a completion feature which recognizes remote files and folders.
 
-`put`/`get` command lines includes the uploading/downloading of large file with a retry mechanism in case a chunk is not correctly uploaded/downloaded.
+`put`/`get` commands include the uploading/downloading of large file with a retry mechanism in case a chunk is not correctly uploaded/downloaded.
 
 A progress bar is optionnally available for downloading and uploading large file if the `tqdm` package is installed.
 
-`mget` and `get` commands includes a server throttling detection mechanism: if a throttling message is received, a timer is triggered until the server becomes available. In the case you plan to download large file or folder, it is recommended to install the `tqdm` package so that you can see the remaining time which may be significantly long (more than one hour).
+`mget` and `get` commands include a server throttling detection mechanism: if a throttling message is received, a timer is triggered until the server becomes available. In the case you plan to download large file or folder, it is recommended to install the `tqdm` package so that you can see the remaining time which may be significantly long (more than one hour).
 
 Parameters of each command are described in help output
 
@@ -50,8 +50,8 @@ ODC has been tested with the following environment
 - python 3.8/python 3.9/python 3.10
 - Personal Microsoft account
 
-Progress bar can be enabled when a large file is uploaded. This features needs `tqdm` python module.
-Differential uploading and downloading (`mput` and `mget` comands) are available if a`quickxorhash` command is available in `PATH` variable)
+Progress bar can be enabled when a large file is uploaded. This feature needs `tqdm` python module.
+Differential uploading and downloading (`mput` and `mget` comands) are available if a`quickxorhash` command is available in `PATH` variable.
 
 ## Installation
 
@@ -107,7 +107,7 @@ Differential uploading and downloading (`mput` and `mget` comands) are available
         $ cat << EOF > /usr/local/sbin/odc
         #!/bin/sh
 
-        <venv_folder>/bin/python <venv_folder>/odc/odc.py
+        <venv_folder>/bin/python <venv_folder>/odc/odc.py $@
         EOF
 
 - It is now possible to use ODC
