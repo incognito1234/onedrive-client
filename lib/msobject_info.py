@@ -589,6 +589,13 @@ class DictMsObject():
 
 class ObjectInfoFactory:
 
+  class ObjectRetrievalException(Exception):
+
+    def __init__(self, error_code):
+      super().__init__(f"Object Retrieval Exception, error_code = {error_code}")
+      self.error_code = error_code
+
+
   @staticmethod
   def get_object_info(mgc,
                       path,
@@ -608,7 +615,7 @@ class ObjectInfoFactory:
     r = mgc.mgc.get(
         f'{MsGraphClient.graph_url}/me/drive/root{prefixed_path}').json()
     if 'error' in r:
-      return (r['error']['code'], None)
+      raise ObjectInfoFactory.ObjectRetrievalException(r['error']['code'])
 
     if ('folder' in r):
       # import pprint
@@ -618,7 +625,7 @@ class ObjectInfoFactory:
     else:
       mso = ObjectInfoFactory.MsFileInfoFromMgcResponse(
           mgc, r, parent, no_warn_if_no_parent=no_warn_if_no_parent)
-    return (None, mso)
+    return mso
 
   @staticmethod
   def get_object_info_from_id(
@@ -633,7 +640,7 @@ class ObjectInfoFactory:
     r = mgc.mgc.get(
         f'{MsGraphClient.graph_url}/me/drive/items/{ms_id}').json()
     if 'error' in r:
-      return (r['error']['code'], None)
+      raise ObjectInfoFactory.ObjectRetrievalException(r['error']['code'])
 
     if ('folder' in r):
       # import pprint
@@ -645,7 +652,7 @@ class ObjectInfoFactory:
       mso = ObjectInfoFactory.MsFileInfoFromMgcResponse(
           mgc, r, parent, no_warn_if_no_parent=no_warn_if_no_parent,
           no_update_of_global_dict=no_update_of_global_dict)
-    return (None, mso)
+    return mso
 
   @staticmethod
   def MsFolderFromMgcResponse(

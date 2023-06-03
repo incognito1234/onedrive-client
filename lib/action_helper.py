@@ -6,7 +6,7 @@ import getpass
 
 from lib.check_helper import quickxorhash
 from lib.shell_helper import OneDriveShell, LsFormatter, MsFolderFormatter, MsFileFormatter
-from lib.msobject_info import ObjectInfoFactory
+from lib.msobject_info import ObjectInfoFactory as OIF
 from lib.bulk_helper import bulk_folder_download, bulk_folder_upload
 from beartype import beartype
 from lib.graph_helper import MsGraphClient
@@ -31,7 +31,7 @@ def action_get_children(
         long_format: bool):
   # TODO Make column sizes adaptative
   folder_info = ObjectInfoFactory.get_object_info(
-      mgc, folder, no_warn_if_no_parent=True)[1]
+      mgc, folder, no_warn_if_no_parent=True)
   folder_info.retrieve_children_info(recursive=False, depth=0)
   ls_formatter = LsFormatter(MsFileFormatter(60), MsFolderFormatter(60), False)
   if long_format:
@@ -113,12 +113,12 @@ def action_remove(mgc: MsGraphClient, file_path: str):
 
 @beartype
 def action_get_info(mgc: MsGraphClient, remote_path: str):
-  r = ObjectInfoFactory.get_object_info(
+  try:
+    r = OIF.get_object_info(
       mgc, remote_path, no_warn_if_no_parent=True)
-  if r[0] is not None:
+    print(r.str_full_details())
+  except OIF.ObjectRetrievalException:
     print("Object not found")
-  else:
-    print(r[1].str_full_details())
 
 
 @beartype

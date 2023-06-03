@@ -23,7 +23,7 @@ from lib._common import PROGRAM_NAME, get_versionned_name
 from lib._typing import List, Optional, Tuple
 from lib.graph_helper import MsGraphClient
 from lib.msobject_info import DictMsObject, MsFileInfo, MsFolderInfo, MsObject
-from lib.msobject_info import ObjectInfoFactory as Oif
+from lib.msobject_info import ObjectInfoFactory as OIF
 from lib.msobject_info import StrPathUtil
 from lib.printer_helper import (ColumnsPrinter, FormattedString, alignleft,
                                 print_with_optional_paging)
@@ -484,7 +484,7 @@ class DeltaChecker():
     msobj = DictMsObject.get(diff_item["id"])
 
     # 2 - Update new/updated items
-    fi_ref = Oif.MsFileInfoFromMgcResponse(
+    fi_ref = OIF.MsFileInfoFromMgcResponse(
         self.mgc, diff_item,
         no_warn_if_no_parent=True, no_update_of_global_dict=True)
 
@@ -494,7 +494,7 @@ class DeltaChecker():
 
     if msobj is not None:
       self.lg.debug(f"Known file has been updated - obj = {msobj.path}")
-      Oif.UpdateMsFileInfo(msobj, fi_ref)
+      OIF.UpdateMsFileInfo(msobj, fi_ref)
 
     if msobj is None and msobj_new_parent is not None:
       self.lg.debug(f"Unknown file but parent exists."
@@ -524,11 +524,11 @@ class DeltaChecker():
     msobj = DictMsObject.get(diff_item["id"])
 
     # 2 - Update new/updated items
-    fi_ref = Oif.get_object_info_from_id(
-        self.mgc, diff_item["id"], no_warn_if_no_parent=True,
-        no_update_of_global_dict=True)[1]
-
-    if fi_ref is None:
+    try:
+      fi_ref = OIF.get_object_info_from_id(
+          self.mgc, diff_item["id"], no_warn_if_no_parent=True,
+          no_update_of_global_dict=True)
+    except OIF.ObjectRetrievalException:
       self.lg.warning(f"No folder object found '{diff_item['name']}'")
       return
 
@@ -539,7 +539,7 @@ class DeltaChecker():
 
     if msobj is not None:
       self.lg.debug(f"Known folder has been updated - obj = {msobj.path}")
-      Oif.UpdateMsFolderInfo(msobj, fi_ref)
+      OIF.UpdateMsFolderInfo(msobj, fi_ref)
 
     if msobj is None and msobj_new_parent is not None:
       self.lg.debug(f"Unknown folder but parent exists."
@@ -740,8 +740,8 @@ class OneDriveShell:
   def __init__(self, mgc: MsGraphClient):
     cinit()  # initialize colorama
     self.mgc = mgc
-    self.root_folder = Oif.get_object_info(
-        mgc, "/", no_warn_if_no_parent=True)[1]
+    self.root_folder = OIF.get_object_info(
+        mgc, "/", no_warn_if_no_parent=True)
     self.current_fi = self.root_folder
     self.only_folders = False
     self.ls_formatter = LsFormatter(MsFileFormatter(20), MsFolderFormatter(20))
@@ -863,7 +863,7 @@ class OneDriveShell:
 
       self.mgc.put_file_content(dst_folder_path, args.srcfile, dst_filename)
 
-      msoi_new_file = Oif.get_object_info(
+      msoi_new_file = OIF.get_object_info(
           self.mgc, f"{dst_folder_path}/{dst_filename}", parent=dst_parent)[1]
       msoi_new_file.update_parent_after_arrival(
           dst_parent, msoi_new_file.last_modified_datetime)

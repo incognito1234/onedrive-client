@@ -8,7 +8,7 @@ from lib.check_helper import quickxorhash
 from beartype import beartype
 from lib.graph_helper import MsGraphClient
 from lib.msobject_info import (
-    ObjectInfoFactory, MsFolderInfo, MsFileInfo)
+    ObjectInfoFactory as OIF, MsFolderInfo, MsFileInfo)
 
 try:
   from tqdm import tqdm
@@ -29,22 +29,22 @@ def bulk_folder_download(
   lg.debug(
       f"bulk_folder_download - folder = '{folder_path}'"
       f" - dest_path = {dest_path} - depth = '{max_depth}'")
-  remote_object = ObjectInfoFactory.get_object_info(
-      mgc, folder_path, no_warn_if_no_parent=True)
+  try:
+    remote_object = OIF.get_object_info(
+        mgc, folder_path, no_warn_if_no_parent=True)
 
-  if remote_object[0]:
+    if not isinstance(remote_object, MsFolderInfo):
+      lg.error(
+          f"[bulk_folder_download]'{dest_path}' is a file")
+      return False
+
+    remote_object.retrieve_children_info(recursive=True, depth=max_depth)
+    mdownload_folder(mgc, remote_object, dest_path, depth=max_depth)
+
+  except OIF.ObjectRetrievalException:
     lg.error(
         f"[bulk_folder_download]folder '{dest_path}' does not exist")
     return False
-  folder_info = remote_object[1]
-  if not isinstance(folder_info, MsFolderInfo):
-    lg.error(
-        f"[bulk_folder_download]'{dest_path}' is a file")
-    return False
-
-  folder_info.retrieve_children_info(recursive=True, depth=max_depth)
-  mdownload_folder(mgc, folder_info, dest_path, depth=max_depth)
-
 
 @beartype
 def mdownload_folder(
@@ -147,23 +147,21 @@ def bulk_folder_upload(
   lg.debug(
       f"[bulk_folder_upload]src_local_path = '{src_local_path}'"
       f" - dst_remote_folder = {dst_remote_folder} - depth = '{max_depth}'")
-  remote_object = ObjectInfoFactory.get_object_info(
-      mgc, dst_remote_folder, no_warn_if_no_parent=True)
-  if remote_object[0]:
+  try:
+    remote_folder_info = OIF.get_object_info(
+        mgc, dst_remote_folder, no_warn_if_no_parent=True)
+    if not isinstance(remote_folder_info, MsFolderInfo):
+      lg.error(
+          f"[bulk_folder_upload]{dst_remote_folder} exists but is not a folder"
+          " - stop upload")
+      return False
+    remote_folder_info.retrieve_children_info(recursive=True, depth=max_depth)
+    mupload_folder(mgc, remote_folder_info, src_local_path, depth=max_depth)
+  except OIF.ObjectRetrievalException:
     lg.error(
         f"[bulk_folder_upload]folder '{dst_remote_folder}' does not exist"
         " - Please create it first")
     return False
-
-  remote_folder_info = remote_object[1]
-
-  if not isinstance(remote_folder_info, MsFolderInfo):
-    lg.error(
-        f"[bulk_folder_upload]{dst_remote_folder} exists but is not a folder"
-        " - stop upload")
-    return False
-  remote_folder_info.retrieve_children_info(recursive=True, depth=max_depth)
-  mupload_folder(mgc, remote_folder_info, src_local_path, depth=max_depth)
 
 
 @beartype
