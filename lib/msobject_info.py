@@ -227,8 +227,10 @@ class MsFolderInfo(MsObject):
     self.__mgc = mgc
     self.children_file = []
     self.children_folder = []
+    self.children_other = []
     self.__dict_children_file = {}
     self.__dict_children_folder = {}
+    self.__dict_children_other = {}
     self.next_link_children = None
 
     self.child_count = child_count
@@ -253,9 +255,12 @@ class MsFolderInfo(MsObject):
     if isinstance(child, MsFolderInfo):
       self.children_folder.remove(child)
       self.__dict_children_folder.pop(child.name)
-    else:  # isinstance(child, MsFileInfo)
+    elif isinstance(child, MsFileInfo):
       self.children_file.remove(child)
       self.__dict_children_file.pop(child.name)
+    else: #isinstance(child, MsOtherInfo):
+      self.children_other.remove(child)
+      self.__dict_children_other.pop(child.name)
 
   def retrieve_children_info(
           self,
@@ -279,8 +284,8 @@ class MsFolderInfo(MsObject):
       self.next_link_children = next_link
 
       for c in ms_response:
-        isFolder = 'folder' in c
-        if isFolder and not self.folders_retrieval_has_started():
+
+        if not self.folders_retrieval_has_started() and 'folder' in c:
           fi = ObjectInfoFactory.MsFolderFromMgcResponse(self.__mgc, c, self)
           self.__add_folder_info_if_necessary(fi)
           if recursive:
@@ -289,9 +294,14 @@ class MsFolderInfo(MsObject):
                 recursive=recursive,
                 depth=depth - 1)
 
-        elif not only_folders and not isFolder:
+        elif not only_folders and 'file' in c:
           fi = ObjectInfoFactory.MsFileInfoFromMgcResponse(self.__mgc, c, self)
           self.__add_file_info_if_necessary(fi)
+
+        elif not only_folders and 'package' in c:
+          fi = ObjectInfoFactory.MsOtherInfoFromMgcResponse(self.__mgc, c, self)
+          self.__add_other_info_if_necessary(fi)
+
         # else:   - isFolder and folder already retrieved
 
       lg.debug(
@@ -376,11 +386,18 @@ class MsFolderInfo(MsObject):
       self.children_file.append(file_info)
       self.__dict_children_file[file_info.name] = file_info
 
+  def __add_other_info_if_necessary(self, other_info):
+    if other_info.name not in self.__dict_children_other:
+      self.children_other.append(other_info)
+      self.__dict_children_other[other_info.name] = other_info
+
   def add_object_info(self, object_info: MsObject):
     if isinstance(object_info, MsFolderInfo):
       self.__add_folder_info_if_necessary(object_info)
-    else:  # isinstance(object_info, MsFileInfo)
+    elif isinstance(object_info, MsFileInfo):
       self.__add_file_info_if_necessary(object_info)
+    else: # isinstance(object_info, MsOtherInfo):
+      self.__add_other_info_if_necessary(object_info)
 
   def get_direct_child_folder(
           self,
@@ -510,18 +527,13 @@ class MsFolderInfo(MsObject):
 
 
 class MsFileInfo(MsObject):
-  def __init__(
-          self, name, parent_path, mgc, file_id,
+  def __init__(self, name, parent_path, mgc, file_id,
           size, qxh, s1h, cdt, lmdt, parent=None):
     # qxh = quickxorhash
     super().__init__(parent, name, parent_path, file_id, size, lmdt, cdt)
     self.mgc = mgc
     self.sha1hash = s1h
     self.qxh = qxh
-
-  def _get_id(self):
-    return self.__id
-  id = property(_get_id)
 
   def _change_name_in_parent(self, new_name):
     if self.parent is not None:
@@ -552,6 +564,43 @@ class MsFileInfo(MsObject):
 
   def __repr__(self):
     return f"File({self.name})"
+
+
+class MsOtherInfo(MsObject):
+
+  def __init__(self, name, parent_path, mgc, ms_id,
+          size, cdt, lmdt, parent=None):
+    super().__init__(parent, name, parent_path, ms_id, size, lmdt, cdt)
+    self.mgc = mgc
+
+  def _change_name_in_parent(self, new_name):
+    if self.parent is not None:
+      if self.name in self.parent._MsFolderInfo__dict_children_other:
+        self.parent._MsFolderInfo__dict_children_other.pop(self.name)
+        self.parent._MsFolderInfo__dict_children_other[new_name] = self
+
+  def __str__(self):
+    fname = f"{self.name}" if len(self.name) < 45 else f"{self.name[:40]}..."
+    fmdt = self.last_modified_datetime.strftime("%Y-%m-%d %H:%M:%S")
+    result = f"{self.size:>20,}  {fname:<45}  {fmdt}  "
+    return result
+
+  def str_full_details(self):
+    result = (
+        f"File - '{self.name}'\n"
+        f"  name                  = {self.name}\n"
+        f"  full_path             = {self.path}\n"
+        f"  id                    = {self.ms_id:>20}\n"
+        f"  size                  = {self.size:,}\n"
+        f"  creationDateTime      = {self.creation_datetime}\n"
+        f"  lastModifiedDateTime  = {self.last_modified_datetime}"
+    )
+
+    return result
+
+  def __repr__(self):
+    return f"Other({self.name})"
+
 
 
 class DictMsObject():
@@ -762,6 +811,35 @@ class ObjectInfoFactory:
 
     if parent is not None:
       parent._MsFolderInfo__add_file_info_if_necessary(result)
+
+    if not no_update_of_global_dict:
+      DictMsObject.add_or_update(result)
+    return result
+
+  @staticmethod
+  def MsOtherInfoFromMgcResponse(
+          mgc,
+          mgc_response_json,
+          parent=None,
+          no_warn_if_no_parent=False, no_update_of_global_dict=False):
+    if parent is None and not no_warn_if_no_parent:
+      lg.warning(
+          "[MsOtherInfoFromMgcResponse]No parent folder to create a other info")
+
+    ms_id = mgc_response_json['id']
+    result = MsOtherInfo(
+        mgc_response_json['name'],
+        urllib.parse.unquote(mgc_response_json['parentReference']['path'][13:]),
+        mgc,
+        ms_id, mgc_response_json['size'],
+        utc_dt_from_str_ms_datetime(
+            mgc_response_json['createdDateTime']),
+        utc_dt_from_str_ms_datetime(
+            mgc_response_json['lastModifiedDateTime']),
+        parent=parent)
+
+    if parent is not None:
+      parent._MsFolderInfo__add_other_info_if_necessary(result)
 
     if not no_update_of_global_dict:
       DictMsObject.add_or_update(result)

@@ -744,7 +744,7 @@ class OneDriveShell:
         mgc, "/", no_warn_if_no_parent=True)
     self.current_fi = self.root_folder
     self.only_folders = False
-    self.ls_formatter = LsFormatter(MsFileFormatter(20), MsFolderFormatter(20))
+    self.ls_formatter = LsFormatter(MsNoFolderFormatter(20), MsFolderFormatter(20))
     self.cp = Completer(self)
     self.initiate_commands()
     # Lock to ensure no simultaneousity of command launch, completion and
@@ -1065,7 +1065,7 @@ class OneDriveShell:
     add_new_cmd('!cd', sp_l_cd, action_l_cd, SubCompleterLocalCommand())
 
   def change_max_column_size(self, nb):
-    self.ls_formatter = LsFormatter(MsFileFormatter(nb), MsFolderFormatter(nb))
+    self.ls_formatter = LsFormatter(MsNoFolderFormatter(nb), MsFolderFormatter(nb))
 
   def change_current_folder_to_parent(self):
     if self.current_fi.parent is not None:
@@ -1273,12 +1273,12 @@ class MsFolderFormatter(InfoFormatter):
         f"{what.name}/")
 
 
-class MsFileFormatter(InfoFormatter):
+class MsNoFolderFormatter(InfoFormatter):
   def __init__(self, max_name_size=25):
     self.max_name_size = max_name_size
 
   @beartype
-  def format(self, what: MsFileInfo):
+  def format(self, what: MsObject):
     fname = f"{what.name}" if len(
         what.name) < self.max_name_size else f"{what.name[:self.max_name_size - 5]}..."
     fmdt = what.last_modified_datetime.strftime("%b %d %H:%M")
@@ -1290,7 +1290,7 @@ class MsFileFormatter(InfoFormatter):
     return result
 
   @beartype
-  def format_lite(self, what: MsFileInfo):
+  def format_lite(self, what: MsObject):
     return FormattedString.build_from_string(what.name)
 
 
@@ -1299,7 +1299,7 @@ class LsFormatter():
   @beartype
   def __init__(
           self,
-          file_formatter: MsFileFormatter,
+          file_formatter: MsNoFolderFormatter,
           folder_formatter: MsFolderFormatter,
           include_number: bool = True):
     self.file_formatter = file_formatter
@@ -1331,9 +1331,11 @@ class LsFormatter():
     folder_names = map(folder_desc_formatter, fi.children_folder)
     if not only_folders:
       file_names = map(file_desc_formatter, fi.children_file)
+      other_names = map(file_desc_formatter, fi.children_other)
     else:
       file_names = []
-    all_names = list(folder_names) + list(file_names)
+      other_names = []
+    all_names = list(folder_names) + list(file_names) + list(other_names)
 
     if with_columns:
       result = self.column_printer.format_with_columns(all_names)
