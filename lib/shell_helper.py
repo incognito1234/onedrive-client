@@ -132,7 +132,7 @@ class SubCompleter(ABC):
     pass
 
 
-class SubCompleterFileOrFolder(SubCompleter):
+class SubCompleterChildren(SubCompleter):
 
   @beartype
   def __init__(self, ods: "OneDriveShell", only_folder: bool):
@@ -189,7 +189,9 @@ class SubCompleterFileOrFolder(SubCompleter):
     if self.__only_folder:
       all_children = search_folder.children_folder
     else:
-      all_children = search_folder.children_folder + search_folder.children_file
+      all_children = (search_folder.children_folder
+                      + search_folder.children_file
+                      + search_folder.children_other)
     folders = map(
         lambda x: f"{x.name}{'/' if isinstance(x, MsFolderInfo) else ''}",
         all_children)
@@ -333,7 +335,7 @@ class SubCompleterMulti(SubCompleter):
     super(self.__class__, self).__init__()
     self.__sc_first_arg = SubCompleterLocalCommand(
         custom_command=custom_command, first_exclamation_mark=False)
-    self.__sc_second_arg = SubCompleterFileOrFolder(ods, False)
+    self.__sc_second_arg = SubCompleterChildren(ods, False)
     self.lg_complete = logging.getLogger("odc.browser.completer")
 
   @beartype
@@ -1044,21 +1046,21 @@ class OneDriveShell:
 
     # Populate commands
     self.dict_cmds:dict[str,OneDriveShell.Command] = {}
-    add_new_cmd('cd', sp_cd, action_cd, SubCompleterFileOrFolder(
+    add_new_cmd('cd', sp_cd, action_cd, SubCompleterChildren(
         self, only_folder=True))
-    add_new_cmd('ls', sp_ls, action_ls, SubCompleterFileOrFolder(
+    add_new_cmd('ls', sp_ls, action_ls, SubCompleterChildren(
         self, only_folder=True))
     add_new_cmd('lls', sp_lls, action_lls, SubCompleterNone())
-    add_new_cmd('stat', sp_stat, action_stat, SubCompleterFileOrFolder(
+    add_new_cmd('stat', sp_stat, action_stat, SubCompleterChildren(
         self, only_folder=False))
-    add_new_cmd('mkdir', sp_mkdir, action_mkdir, SubCompleterFileOrFolder(
+    add_new_cmd('mkdir', sp_mkdir, action_mkdir, SubCompleterChildren(
         self, only_folder=True))
-    add_new_cmd('get', sp_get, action_get, SubCompleterFileOrFolder(
+    add_new_cmd('get', sp_get, action_get, SubCompleterChildren(
         self, only_folder=False))
     add_new_cmd('put', sp_put, action_put, SubCompleterMulti(self, 'put'))
-    add_new_cmd('mv', sp_mv, action_mv, SubCompleterFileOrFolder(
+    add_new_cmd('mv', sp_mv, action_mv, SubCompleterChildren(
         self, only_folder=False))
-    add_new_cmd('rm', sp_rm, action_rm, SubCompleterFileOrFolder(
+    add_new_cmd('rm', sp_rm, action_rm, SubCompleterChildren(
         self, only_folder=False))
     add_new_cmd('pwd', sp_pwd, action_pwd, SubCompleterNone())
     # For any strange reason, cd does not work as common 'os.system'
