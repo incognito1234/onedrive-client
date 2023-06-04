@@ -744,6 +744,10 @@ class OneDriveShell:
     self.mgc = mgc
     self.root_folder = OIF.get_object_info(
         mgc, "/", no_warn_if_no_parent=True)
+    # Ensure that root is a MsFolderInfo object
+    # Only for help development with autocompletion
+    if not isinstance(self.root_folder, MsFolderInfo):
+      return
     self.current_fi = self.root_folder
     self.only_folders = False
     self.ls_formatter = LsFormatter(MsNoFolderFormatter(20), MsFolderFormatter(20))
@@ -818,13 +822,18 @@ class OneDriveShell:
 
     def action_stat(self2, args):
       obj_name = args.remotepath
-      if self.current_fi.relative_path_is_a_file(
+      cfi = self.current_fi
+      # if not isinstance(cfi, MsFolderInfo):
+      #   return
+      if cfi.relative_path_is_a_file(
               obj_name, force_children_retrieval=True):
-        print(self.current_fi.get_child_file(obj_name).str_full_details())
-      elif self.current_fi.relative_path_is_a_folder(obj_name):
-        print(self.current_fi.get_child_folder(obj_name).str_full_details())
+        print(cfi.get_child_file(obj_name).str_full_details())
+      elif cfi.relative_path_is_a_folder(obj_name):
+        print(cfi.get_child_folder(obj_name).str_full_details())
+      elif cfi.relative_path_is_other(obj_name):
+        print(cfi.get_child_other(obj_name).str_full_details())
       else:
-        print(f"{obj_name} is not a child of current folder({self.current_fi.path})")
+        print(f"{obj_name} is not a child of current folder({cfi.path})")
 
     def action_get(self2, args):
       file_name = args.remotepath

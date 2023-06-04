@@ -469,6 +469,36 @@ class MsFolderInfo(MsObject):
       self.retrieve_children_info(only_folders=False)
     return file_name in self.__dict_children_file
 
+  def is_direct_child_other(self, other_name, force_children_retrieval=False):
+    if force_children_retrieval and not self.folders_retrieval_has_started():
+      self.retrieve_children_info(only_folders=False)
+    return other_name in self.__dict_children_other
+
+  def get_direct_child_other(self, other_name, force_children_retrieval=False):
+    if force_children_retrieval and not self.folders_retrieval_has_started():
+      self.retrieve_children_info(only_folders=False)
+    return self.__dict_children_other[other_name] if other_name in self.__dict_children_other else None
+
+  def get_child_other(
+      self,
+      relative_other_path,
+      force_children_retrieval=False):
+    path_parts = relative_other_path.split(os.sep)
+    search_folder = self
+    i = 0
+    while i < (len(path_parts) - 1):
+      f = path_parts[i]
+      if search_folder.is_direct_child_folder(f, force_children_retrieval):
+        search_folder = search_folder.get_direct_child_folder(
+            f, force_children_retrieval)
+      else:
+        return None
+      i += 1
+    if search_folder.is_direct_child_other(
+            path_parts[-1], force_children_retrieval):
+      return search_folder.get_direct_child_other(
+          path_parts[-1], force_children_retrieval)
+
   def relative_path_is_a_file(
           self,
           relative_file_path,
@@ -477,16 +507,13 @@ class MsFolderInfo(MsObject):
         relative_file_path,
         force_children_retrieval) is not None
 
-  def relative_path_is_a_child(
+  def relative_path_is_other( # Child but not a file neither a folder
           self,
           relative_path,
           force_children_retrieval=False):
-    return (
-        self.relative_path_is_a_file(
-            relative_path,
-            force_children_retrieval) or self.relative_path_is_a_folder(
-            relative_path,
-            force_children_retrieval))
+    return self.get_child_other(
+        relative_path,
+        force_children_retrieval) is not None
 
   def files_retrieval_has_started(self):
     return self.__children_files_retrieval_status == "all" or self.__children_files_retrieval_status == "partial"
@@ -569,9 +596,10 @@ class MsFileInfo(MsObject):
 class MsOtherInfo(MsObject):
 
   def __init__(self, name, parent_path, mgc, ms_id,
-          size, cdt, lmdt, parent=None):
+          size, cdt, lmdt, type_other, parent=None):
     super().__init__(parent, name, parent_path, ms_id, size, lmdt, cdt)
     self.mgc = mgc
+    self.type_other = type_other  # "type" is a reserved keyword
 
   def _change_name_in_parent(self, new_name):
     if self.parent is not None:
@@ -587,7 +615,8 @@ class MsOtherInfo(MsObject):
 
   def str_full_details(self):
     result = (
-        f"File - '{self.name}'\n"
+        f"Object - '{self.name}'\n"
+        f"  type                  = {self.type_other}\n"
         f"  name                  = {self.name}\n"
         f"  full_path             = {self.path}\n"
         f"  id                    = {self.ms_id:>20}\n"
@@ -671,8 +700,11 @@ class ObjectInfoFactory:
       # pprint.pprint(mgc_response_json)
       mso = ObjectInfoFactory.MsFolderFromMgcResponse(
           mgc, r, parent, no_warn_if_no_parent=no_warn_if_no_parent)
-    else:
+    elif ('file' in r):
       mso = ObjectInfoFactory.MsFileInfoFromMgcResponse(
+          mgc, r, parent, no_warn_if_no_parent=no_warn_if_no_parent)
+    else:
+      mso = ObjectInfoFactory.MsOtherInfoFromMgcResponse(
           mgc, r, parent, no_warn_if_no_parent=no_warn_if_no_parent)
     return mso
 
@@ -827,6 +859,12 @@ class ObjectInfoFactory:
           "[MsOtherInfoFromMgcResponse]No parent folder to create a other info")
 
     ms_id = mgc_response_json['id']
+    if ('package' in mgc_response_json
+        and 'type' in mgc_response_json['package']):
+      type_other = mgc_response_json['package']['type']
+    else:
+      type_other = 'unknown'
+
     result = MsOtherInfo(
         mgc_response_json['name'],
         urllib.parse.unquote(mgc_response_json['parentReference']['path'][13:]),
@@ -836,6 +874,7 @@ class ObjectInfoFactory:
             mgc_response_json['createdDateTime']),
         utc_dt_from_str_ms_datetime(
             mgc_response_json['lastModifiedDateTime']),
+        type_other,
         parent=parent)
 
     if parent is not None:
