@@ -1118,7 +1118,11 @@ class OneDriveShell:
       # Trim my_input and remove double spaces
       my_input = " ".join(my_raw_input.split())
       my_input = my_input.replace(" = ", "=")
-      parts_cmd = shlex.split(my_input)
+      try:
+        parts_cmd = shlex.split(my_input)
+      except ValueError as e:
+        print(f"ERROR: {e}")
+        parts_cmd = []
       if len(parts_cmd) > 0:
         cmd = parts_cmd[0]
       else:
