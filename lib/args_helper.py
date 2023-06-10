@@ -111,6 +111,11 @@ def parse_odc_args(default_action):
       type=int,
       help='maximum depth',
       default=999)
+  parser_mdownload.add_argument(
+      '-n',
+      action="store_true",
+      default=False,
+      help='skip warning if no-file-or-folder object are found (as Notebook)')
   parser_mdownload.set_defaults(command="mget")
 
   parser_get_info = sub_parsers.add_parser(

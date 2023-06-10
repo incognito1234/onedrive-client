@@ -4,6 +4,7 @@
 import logging
 
 import os
+import sys
 from lib.check_helper import quickxorhash
 from beartype import beartype
 from lib.graph_helper import MsGraphClient
@@ -25,7 +26,8 @@ def bulk_folder_download(
         mgc: MsGraphClient,
         folder_path: str,
         dest_path: str,
-        max_depth: int):
+        max_depth: int,
+        skip_warning: bool = False):
   lg.debug(
       f"bulk_folder_download - folder = '{folder_path}'"
       f" - dest_path = {dest_path} - depth = '{max_depth}'")
@@ -39,7 +41,13 @@ def bulk_folder_download(
       return False
 
     remote_object.retrieve_children_info(recursive=True, depth=max_depth)
-    mdownload_folder(mgc, remote_object, dest_path, depth=max_depth)
+    non_downloadable_files = mdownload_folder(
+      mgc, remote_object, dest_path, depth=max_depth)
+    if len(non_downloadable_files) > 0 and not skip_warning:
+      print("WARN: some non downloadable files have been found and skipped:", file=sys.stderr)
+      for ndf in non_downloadable_files:
+        print(f"  {ndf.path} ({ndf.type_other})")
+
 
   except OIF.ObjectRetrievalException:
     lg.error(
@@ -53,6 +61,9 @@ def mdownload_folder(
         dest_path: str,
         depth: int = 999,
         list_tqdm: list = []):
+  """
+    Return list of file_info non downloadable
+  """
   if os.path.exists(dest_path) and not os.path.isdir(dest_path):
     lg.error(
         f"[mdownload_folder] {dest_path} exists and is not a folder"
@@ -95,10 +106,22 @@ def mdownload_folder(
           t = list_tqdm[i]
           t.update(file_info.size)
 
+  non_downloadable_files = []
+  for file_info in ms_folder.children_other:
+    lg.info(f"[mdownload_folder] object {file_info.path} with type"
+            f"{file_info.type_other} is not downloadable. Skipping.")
+    non_downloadable_files.append(file_info)
+    if tqdm is not None:
+      for i in range(len(list_tqdm) - 1, -1, -1):
+        t = list_tqdm[i]
+        t.update(file_info.size)
+
   if depth > 1:
     for cf in ms_folder.children_folder:
-      mdownload_folder(
-          mgc, cf, f"{dest_path}/{cf.name}", depth - 1, list_tqdm)
+      non_downloadable_files.extend(
+        mdownload_folder(
+            mgc, cf, f"{dest_path}/{cf.name}", depth - 1, list_tqdm)
+      )
 
       # last_tqdm.close()
       # time.sleep(2)
@@ -108,7 +131,7 @@ def mdownload_folder(
     last_tqdm.close()
     list_tqdm.pop()
 
-  return True
+  return non_downloadable_files
 
 
 @beartype

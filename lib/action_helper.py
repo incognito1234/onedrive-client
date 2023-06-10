@@ -94,10 +94,11 @@ def action_mdownload(
         mgc: MsGraphClient,
         folder_path: str,
         dest_path: str,
-        max_depth: int):
+        max_depth: int,
+        skip_warning: bool):
   lg.debug(
       f"action_mdownload - folder = '{folder_path}' - depth = '{max_depth}'")
-  bulk_folder_download(mgc, folder_path, dest_path, max_depth)
+  bulk_folder_download(mgc, folder_path, dest_path, max_depth, skip_warning)
 
 
 @beartype
