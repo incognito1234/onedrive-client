@@ -126,7 +126,26 @@ class MsGraphClient:
     nb_retry = 0
     while True:
       nb_retry += 1
-      r = self.mgc.get(download_url, stream=True)
+
+      nb_retry_exception = 0
+      while True:
+
+        try:
+          r = self.mgc.get(download_url, stream=True)
+          break
+        except Exception as ex:
+          nb_retry_exception += 1
+          lg.error(
+            f"Exception during download_file_content({dst_path}) - "
+            f"{ex=} - {type(ex)=} - Wait 10 seconds"
+          )
+          if nb_retry_exception < 3:
+            time.sleep(10)
+          else:
+            lg.info( "A new exception occured and max retries (3) has been"
+                     "reached. Exit function")
+            return 0
+
       if r.ok:
         break
 
