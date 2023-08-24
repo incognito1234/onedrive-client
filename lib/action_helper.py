@@ -10,6 +10,7 @@ from lib.msobject_info import ObjectInfoFactory as OIF
 from lib.bulk_helper import bulk_folder_download, bulk_folder_upload
 from beartype import beartype
 from lib.graph_helper import MsGraphClient
+from lib._typing import Optional
 import os
 
 lg = logging.getLogger('odc.action')
@@ -95,10 +96,17 @@ def action_mdownload(
         folder_path: str,
         dest_path: str,
         max_depth: int,
-        skip_warning: bool):
+        skip_warning: bool,
+        file_with_exclusion: Optional[str] = None):
   lg.debug(
       f"action_mdownload - folder = '{folder_path}' - depth = '{max_depth}'")
-  bulk_folder_download(mgc, folder_path, dest_path, max_depth, skip_warning)
+  if file_with_exclusion is None:
+    files_to_be_excluded = set()
+  else:
+    files_to_be_excluded = set(l.strip() for l in open(file_with_exclusion).readlines())
+  bulk_folder_download(mgc, folder_path, dest_path,
+                       max_depth, skip_warning,
+                       files_to_be_excluded=files_to_be_excluded)
 
 
 @beartype

@@ -10,7 +10,7 @@ from beartype import beartype
 from lib.graph_helper import MsGraphClient
 from lib.msobject_info import (
     ObjectInfoFactory as OIF, MsFolderInfo, MsFileInfo)
-
+from lib._typing import Optional
 try:
   from tqdm import tqdm
 except Exception:
@@ -27,10 +27,14 @@ def bulk_folder_download(
         folder_path: str,
         dest_path: str,
         max_depth: int,
-        skip_warning: bool = False):
+        skip_warning: bool = False,
+        files_to_be_excluded: Optional[set] = None): # str[]
   lg.debug(
       f"bulk_folder_download - folder = '{folder_path}'"
       f" - dest_path = {dest_path} - depth = '{max_depth}'")
+  if files_to_be_excluded is None:
+    files_to_be_excluded = set()
+
   try:
     remote_object = OIF.get_object_info(
         mgc, folder_path, no_warn_if_no_parent=True)
@@ -42,7 +46,8 @@ def bulk_folder_download(
 
     remote_object.retrieve_children_info(recursive=True, depth=max_depth)
     non_downloadable_files = mdownload_folder(
-      mgc, remote_object, dest_path, depth=max_depth)
+      mgc, remote_object, dest_path, depth=max_depth,
+      files_to_be_excluded=files_to_be_excluded)
     if len(non_downloadable_files) > 0 and not skip_warning:
       print("WARN: some non downloadable files have been found and skipped:", file=sys.stderr)
       for ndf in non_downloadable_files:
@@ -60,10 +65,12 @@ def mdownload_folder(
         ms_folder: MsFolderInfo,
         dest_path: str,
         depth: int = 999,
-        list_tqdm: list = []):
+        list_tqdm: list = [],
+        files_to_be_excluded: Optional[set] = None): # str[]
   """
     Return list of file_info non downloadable
   """
+
   if os.path.exists(dest_path) and not os.path.isdir(dest_path):
     lg.error(
         f"[mdownload_folder] {dest_path} exists and is not a folder"
@@ -89,13 +96,22 @@ def mdownload_folder(
     list_tqdm.append(n_tqdm)
 
   for file_info in ms_folder.children_file:
-    if file_needs_download(file_info, dest_path):
+    if file_info.path in files_to_be_excluded:
+      lg.debug(f"[mdownload_folder] '{file_info.path}' in excluded list."
+               " Skipping it.")
+      if tqdm is not None:
+        for i in range(len(list_tqdm) - 1, -1, -1):
+          t = list_tqdm[i]
+          t.update(file_info.size)
+
+    elif file_needs_download(file_info, dest_path):
       lg.info(
           f"[mdownload_folder] download '{file_info.path}' in '{dest_path}'")
       mgc.download_file_content(
           file_info.path,
           dest_path,
           retry_if_throttled=True, list_tqdm=list_tqdm)
+
     else:
       lg.debug(
           f"[mdownload_folder] no need to download '{file_info.path}'"
@@ -120,7 +136,8 @@ def mdownload_folder(
     for cf in ms_folder.children_folder:
       non_downloadable_files.extend(
         mdownload_folder(
-            mgc, cf, f"{dest_path}/{cf.name}", depth - 1, list_tqdm)
+            mgc, cf, f"{dest_path}/{cf.name}", depth - 1, list_tqdm,
+            files_to_be_excluded=files_to_be_excluded)
       )
 
       # last_tqdm.close()

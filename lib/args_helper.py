@@ -112,6 +112,12 @@ def parse_odc_args(default_action):
       help='maximum depth',
       default=999)
   parser_mdownload.add_argument(
+      '-X',
+      type=str,
+      help='exclude file from a list provided by a file',
+      default=''
+  )
+  parser_mdownload.add_argument(
       '-n',
       action="store_true",
       default=False,

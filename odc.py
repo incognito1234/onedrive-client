@@ -126,7 +126,14 @@ if __name__ == '__main__':
     action_download(mgc, args.remotefile, args.dstlocalpath)
 
   if args.command == "mget":
-    action_mdownload(mgc, args.remotefolder, args.dstlocalpath, args.depth, args.n)
+    action_mdownload(
+        mgc,
+        args.remotefolder,
+        args.dstlocalpath,
+        args.depth,
+        args.n,
+        file_with_exclusion=None if args.X == '' else args.X
+  )
 
   if args.command == "mv":
     action_move(mgc, args.srcpath, args.dstpath)
