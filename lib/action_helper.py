@@ -31,7 +31,7 @@ def action_get_children(
         with_pagination: bool,
         long_format: bool):
   # TODO Make column sizes adaptative
-  folder_info = OIF.get_object_info(
+  folder_info = OIF.get_object_info_from_path(
       mgc, folder, no_warn_if_no_parent=True)
   folder_info.retrieve_children_info(recursive=False, depth=0)
   ls_formatter = LsFormatter(MsNoFolderFormatter(60), MsFolderFormatter(60), False)
@@ -123,7 +123,7 @@ def action_remove(mgc: MsGraphClient, file_path: str):
 @beartype
 def action_get_info(mgc: MsGraphClient, remote_path: str):
   try:
-    r = OIF.get_object_info(
+    r = OIF.get_object_info_from_path(
       mgc, remote_path, no_warn_if_no_parent=True)
     print(r.str_full_details())
   except OIF.ObjectRetrievalException:

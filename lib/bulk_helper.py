@@ -36,7 +36,7 @@ def bulk_folder_download(
     files_to_be_excluded = set()
 
   try:
-    remote_object = OIF.get_object_info(
+    remote_object = OIF.get_object_info_from_path(
         mgc, folder_path, no_warn_if_no_parent=True)
 
     if not isinstance(remote_object, MsFolderInfo):
@@ -188,7 +188,7 @@ def bulk_folder_upload(
       f"[bulk_folder_upload]src_local_path = '{src_local_path}'"
       f" - dst_remote_folder = {dst_remote_folder} - depth = '{max_depth}'")
   try:
-    remote_folder_info = OIF.get_object_info(
+    remote_folder_info = OIF.get_object_info_from_path(
         mgc, dst_remote_folder, no_warn_if_no_parent=True)
     if not isinstance(remote_folder_info, MsFolderInfo):
       lg.error(

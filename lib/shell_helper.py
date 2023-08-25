@@ -502,7 +502,7 @@ class DeltaChecker():
       self.lg.debug(f"Unknown file but parent exists."
                     f"parent = {msobj_new_parent.path} ")
       msobj = fi_ref
-      DictMsObject.add_or_update(msobj)
+      DictMsObject.add_or_get_update(msobj)
 
     if msobj is not None:
       self.__new_parentship_to_be_processed.append((msobj, msobj_new_parent))
@@ -547,7 +547,7 @@ class DeltaChecker():
       self.lg.debug(f"Unknown folder but parent exists."
                     f"parent = {msobj_new_parent.path}")
       msobj = fi_ref
-      DictMsObject.add_or_update(msobj)
+      DictMsObject.add_or_get_update(msobj)
 
     if msobj is not None:
       self.__new_parentship_to_be_processed.append((msobj, msobj_new_parent))
@@ -742,7 +742,7 @@ class OneDriveShell:
   def __init__(self, mgc: MsGraphClient):
     cinit()  # initialize colorama
     self.mgc = mgc
-    self.root_folder = OIF.get_object_info(
+    self.root_folder = OIF.get_object_info_from_path(
         mgc, "/", no_warn_if_no_parent=True)
     # Ensure that root is a MsFolderInfo object
     # Only for help development with autocompletion
@@ -874,7 +874,7 @@ class OneDriveShell:
 
       self.mgc.put_file_content(dst_folder_path, args.srcfile, dst_filename)
 
-      msoi_new_file = OIF.get_object_info(
+      msoi_new_file = OIF.get_object_info_from_path(
           self.mgc, f"{dst_folder_path}/{dst_filename}", parent=dst_parent)[1]
       msoi_new_file.update_parent_after_arrival(
           dst_parent, msoi_new_file.last_modified_datetime)

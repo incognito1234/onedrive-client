@@ -228,9 +228,10 @@ class MsFolderInfo(MsObject):
     self.children_file = []
     self.children_folder = []
     self.children_other = []
-    self.__dict_children_file = {}
-    self.__dict_children_folder = {}
-    self.__dict_children_other = {}
+    self.__dict_children_file = {} # key = name
+    self.__dict_children_folder = {} # key = name
+    self.__dict_children_other = {} # key = name
+
     self.next_link_children = None
 
     self.child_count = child_count
@@ -268,7 +269,8 @@ class MsFolderInfo(MsObject):
           recursive=False,
           depth=999):
     lg.debug(
-        f"[retrieve_children_info] {self.path} - only_folders = {only_folders} - depth = {depth}")
+        f"[retrieve_children_info] {self.path} - only_folders = {only_folders} - depth = {depth} - "
+        f"{self.__children_files_retrieval_status=} - {self.__children_folders_retrieval_status=}")
 
     if depth > 0 and (
         only_folders and not self.folders_retrieval_has_started()
@@ -631,7 +633,6 @@ class MsOtherInfo(MsObject):
     return f"Other({self.name})"
 
 
-
 class DictMsObject():
   __dict_already_discovered_object = {}
   __lock_dict = Lock()  # only used for removing object from dict which is unsafe (1)
@@ -653,16 +654,24 @@ class DictMsObject():
 
   @staticmethod
   @beartype
-  def add_or_update(obj: MsObject):
+  def add_or_get_update(obj: MsObject):
     if obj.ms_id in DictMsObject.__dict_already_discovered_object:
       obj_dict = DictMsObject.__dict_already_discovered_object[obj.ms_id]
       if isinstance(obj, MsFolderInfo):
         ObjectInfoFactory.UpdateMsFolderInfo(obj_dict, obj)
-      else:
+        result = obj_dict
+      elif isinstance(obj, MsFileInfo):
         ObjectInfoFactory.UpdateMsFileInfo(obj_dict, obj)
+        result = obj_dict
+      else:
+        lg.warn("[oif.add_or_update] Object type not considered")
+        result = None
 
     else:
       DictMsObject.__dict_already_discovered_object[obj.ms_id] = obj
+      result = obj
+
+    return result
 
 
 class ObjectInfoFactory:
@@ -673,13 +682,32 @@ class ObjectInfoFactory:
       super().__init__(f"Object Retrieval Exception, error_code = {error_code}")
       self.error_code = error_code
 
+  @staticmethod
+  def get_object_info_from_mgc_response(mgc,
+                      mgc_response,
+                      parent=None,
+                      no_warn_if_no_parent=False,
+                      no_update_and_get_from_global_dict=False) -> MsObject:
+    if 'error' in mgc_response:
+      raise ObjectInfoFactory.ObjectRetrievalException(mgc_response['error']['code'])
+
+    if ('folder' in mgc_response):
+      mso = ObjectInfoFactory.MsFolderFromMgcResponse(
+          mgc, mgc_response, parent, no_warn_if_no_parent, no_update_and_get_from_global_dict)
+    elif ('file' in mgc_response):
+      mso = ObjectInfoFactory.MsFileInfoFromMgcResponse(
+          mgc, mgc_response, parent, no_warn_if_no_parent, no_update_and_get_from_global_dict)
+    else:
+      mso = ObjectInfoFactory.MsOtherInfoFromMgcResponse(
+          mgc, mgc_response, parent, no_warn_if_no_parent, no_update_and_get_from_global_dict)
+    return mso
 
   @staticmethod
-  def get_object_info(mgc,
+  def get_object_info_from_path(mgc,
                       path,
                       parent=None,
-                      no_warn_if_no_parent=False) -> Tuple[object,
-                                                           Optional[MsObject]]:
+                      no_warn_if_no_parent=False,
+                      no_update_and_get_from_global_dict=False) -> MsObject:
     """
       Return a 2-tuple (<error_code>, <object_info>).
       If error_code is not None, object is None and error_code is set code of response sent by Msgraph.
@@ -692,27 +720,15 @@ class ObjectInfoFactory:
     prefixed_path = "" if path == "/" or path == "" else f":/{path}"
     r = mgc.mgc.get(
         f'{MsGraphClient.graph_url}/me/drive/root{prefixed_path}').json()
-    if 'error' in r:
-      raise ObjectInfoFactory.ObjectRetrievalException(r['error']['code'])
 
-    if ('folder' in r):
-      # import pprint
-      # pprint.pprint(mgc_response_json)
-      mso = ObjectInfoFactory.MsFolderFromMgcResponse(
-          mgc, r, parent, no_warn_if_no_parent=no_warn_if_no_parent)
-    elif ('file' in r):
-      mso = ObjectInfoFactory.MsFileInfoFromMgcResponse(
-          mgc, r, parent, no_warn_if_no_parent=no_warn_if_no_parent)
-    else:
-      mso = ObjectInfoFactory.MsOtherInfoFromMgcResponse(
-          mgc, r, parent, no_warn_if_no_parent=no_warn_if_no_parent)
-    return mso
+    return ObjectInfoFactory.get_object_info_from_mgc_response(
+        mgc, r, parent, no_warn_if_no_parent, no_update_and_get_from_global_dict)
 
   @staticmethod
   def get_object_info_from_id(
           mgc, ms_id, parent=None,
           no_warn_if_no_parent=False,
-          no_update_of_global_dict=False) -> Tuple[object, Optional[MsObject]]:
+          no_update_and_get_from_global_dict=False) -> MsObject:
     """
       Return a 2-tuple (<error_code>, <object_info>).
       If error_code is not None, object is None and error_code is set code of response sent by Msgraph.
@@ -720,27 +736,16 @@ class ObjectInfoFactory:
     """
     r = mgc.mgc.get(
         f'{MsGraphClient.graph_url}/me/drive/items/{ms_id}').json()
-    if 'error' in r:
-      raise ObjectInfoFactory.ObjectRetrievalException(r['error']['code'])
 
-    if ('folder' in r):
-      # import pprint
-      # pprint.pprint(mgc_response_json)
-      mso = ObjectInfoFactory.MsFolderFromMgcResponse(
-          mgc, r, parent, no_warn_if_no_parent=no_warn_if_no_parent,
-          no_update_of_global_dict=no_update_of_global_dict)
-    else:
-      mso = ObjectInfoFactory.MsFileInfoFromMgcResponse(
-          mgc, r, parent, no_warn_if_no_parent=no_warn_if_no_parent,
-          no_update_of_global_dict=no_update_of_global_dict)
-    return mso
+    return ObjectInfoFactory.get_object_info_from_mgc_response(
+        mgc, r, parent, no_warn_if_no_parent, no_update_and_get_from_global_dict)
 
   @staticmethod
   def MsFolderFromMgcResponse(
           mgc,
           mgc_response_json,
           parent=None,
-          no_warn_if_no_parent=False, no_update_of_global_dict=False):
+          no_warn_if_no_parent=False, no_update_and_get_from_global_dict=False)->MsFolderInfo:
 
     # Workaround following what seems to be a bug. Space is replaced by "%20" sequence
     #   in mgc_response when parent name contains a space
@@ -763,6 +768,7 @@ class ObjectInfoFactory:
     # full_path = "" if "root" in mgc_response_json else
     # f"{parent_path}/{mgc_response_json['name']}"
     ms_id = mgc_response_json['id']
+
     result = MsFolderInfo(
         parent_path=parent_path,
         name=mgc_response_json['name'],
@@ -779,8 +785,8 @@ class ObjectInfoFactory:
     if parent is not None:
       parent._MsFolderInfo__add_folder_info_if_necessary(result)
 
-    if not no_update_of_global_dict:
-      DictMsObject.add_or_update(result)
+    if not no_update_and_get_from_global_dict:
+      result = DictMsObject.add_or_get_update(result)
     return result
 
   @staticmethod
@@ -815,7 +821,7 @@ class ObjectInfoFactory:
           mgc,
           mgc_response_json,
           parent=None,
-          no_warn_if_no_parent=False, no_update_of_global_dict=False):
+          no_warn_if_no_parent=False, no_update_and_get_from_global_dict=False)->MsFileInfo:
     if parent is None and not no_warn_if_no_parent:
       lg.warning(
           "[MsFileFromMgcResponse]No parent folder to create a file info")
@@ -844,8 +850,8 @@ class ObjectInfoFactory:
     if parent is not None:
       parent._MsFolderInfo__add_file_info_if_necessary(result)
 
-    if not no_update_of_global_dict:
-      DictMsObject.add_or_update(result)
+    if not no_update_and_get_from_global_dict:
+      result =DictMsObject.add_or_get_update(result)
     return result
 
   @staticmethod
@@ -853,7 +859,7 @@ class ObjectInfoFactory:
           mgc,
           mgc_response_json,
           parent=None,
-          no_warn_if_no_parent=False, no_update_of_global_dict=False):
+          no_warn_if_no_parent=False, no_update_and_get_from_global_dict=False)->MsOtherInfo:
     if parent is None and not no_warn_if_no_parent:
       lg.warning(
           "[MsOtherInfoFromMgcResponse]No parent folder to create a other info")
@@ -880,6 +886,6 @@ class ObjectInfoFactory:
     if parent is not None:
       parent._MsFolderInfo__add_other_info_if_necessary(result)
 
-    if not no_update_of_global_dict:
-      DictMsObject.add_or_update(result)
+    if not no_update_and_get_from_global_dict:
+      result = DictMsObject.add_or_get_update(result)
     return result
