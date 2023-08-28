@@ -488,7 +488,7 @@ class DeltaChecker():
     # 2 - Update new/updated items
     fi_ref = OIF.MsFileInfoFromMgcResponse(
         self.mgc, diff_item,
-        no_warn_if_no_parent=True, no_update_of_global_dict=True)
+        no_warn_if_no_parent=True, no_update_and_get_from_global_dict=True)
 
     # 3 - Update file info if necessary and create it if parent exists
     parent_id = diff_item["parentReference"]["id"]
@@ -529,7 +529,7 @@ class DeltaChecker():
     try:
       fi_ref = OIF.get_object_info_from_id(
           self.mgc, diff_item["id"], no_warn_if_no_parent=True,
-          no_update_of_global_dict=True)
+          no_update_and_get_from_global_dict=True)
     except OIF.ObjectRetrievalException:
       self.lg.warning(f"No folder object found '{diff_item['name']}'")
       return
