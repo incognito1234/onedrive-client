@@ -20,7 +20,7 @@ The following commands are available:
     rm                Remove a file or a folder
     mkdir             Make a folder
 
-`python odc.py` with no argument launchs the interactive shell. On linux platform, it includes a completion feature which recognizes remote files and folders.
+`odc.py` with no argument launchs the interactive shell. On linux platform, it includes a completion feature which recognizes remote files and folders.
 
 `put`/`get` commands include the uploading/downloading of large file with a retry mechanism in case a chunk is not correctly uploaded/downloaded.
 
@@ -30,7 +30,7 @@ A progress bar is optionnally available for downloading and uploading large file
 
 Parameters of each command are described in help output
 
-    $ python odc.py <command> -h
+    $ odc.py <command> -h
 
 ## ODC in action
 
@@ -50,7 +50,7 @@ ODC has been tested with the following environment
 - python 3.8/python 3.9/python 3.10
 - Personal Microsoft account
 
-Progress bar can be enabled when a large file is uploaded. This feature needs `tqdm` python module.
+Progress bar can be enabled when a large file or a complete folder is uploaded or downloaded. This feature needs `tqdm` python module.
 Differential uploading and downloading (`mput` and `mget` comands) are available if a`quickxorhash` command is available in `PATH` variable.
 
 ## Installation
@@ -98,7 +98,7 @@ Differential uploading and downloading (`mput` and `mget` comands) are available
   - Copy/Paste `Application ID` and `Secret Value` of azure application in the relevant parts of `oauth_settings.yml` file
   - Initiate connexion
 
-        $ python odc.py init
+        $ ./odc.py init
         ... Copy/Paste provided URL in a browser
         ... Copy/Paste URL of the browser in the console
 
@@ -113,14 +113,19 @@ Differential uploading and downloading (`mput` and `mget` comands) are available
 - It is now possible to use ODC
 
       $ cd <venv_folder>/odc
-      $ python odc.py <args>
+      $ ./odc.py <args>
 
-  or if you have created the shortcut
+  or the shortcut has been created
 
       $ odc <args>
 
 ## Changelog
 _Only main changes are listed here_
+
+### Version 1.3
+- Improve error management during download
+- Add exclusion list as an option of mget command
+- Consider drive object which are not file or folder (could be a Notebook)
 
 ### Version 1.2
 - Consider error when downloading file with re-try mechanisms
