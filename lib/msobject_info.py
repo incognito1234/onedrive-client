@@ -691,6 +691,10 @@ class ObjectInfoFactory:
           parent=None,
           no_warn_if_no_parent=False,
           no_update_and_get_from_global_dict=False) -> MsObject:
+    """
+      Return MsObject from its JSON representation sent by MS Graph.
+      An ObjectRetrievalException is raised in case of error.
+    """
     if 'error' in mgc_response:
       raise ObjectInfoFactory.ObjectRetrievalException(
           mgc_response['error']['code'])
@@ -726,9 +730,8 @@ class ObjectInfoFactory:
           no_warn_if_no_parent=False,
           no_update_and_get_from_global_dict=False) -> MsObject:
     """
-      Return a 2-tuple (<error_code>, <object_info>).
-      If error_code is not None, object is None and error_code is set code of response sent by Msgraph.
-      Else, object_info is set with found object or None if nothing is found.
+      Return MsObject from its path.
+      An ObjectRetrievalException is raised in case of error.
     """
     if len(
             path) > 1 and path[0] == "/":  # Convert relative path in absolute path
@@ -747,9 +750,8 @@ class ObjectInfoFactory:
           no_warn_if_no_parent=False,
           no_update_and_get_from_global_dict=False) -> MsObject:
     """
-      Return a 2-tuple (<error_code>, <object_info>).
-      If error_code is not None, object is None and error_code is set code of response sent by Msgraph.
-      Else, object_info is set with found object or None if nothing is found.
+      Return MsObject from its id.
+      An ObjectRetrievalException is raised in case of error.
     """
     r = mgc.mgc.get(
         f'{MsGraphClient.graph_url}/me/drive/items/{ms_id}').json()
