@@ -228,9 +228,9 @@ class MsFolderInfo(MsObject):
     self.children_file = []
     self.children_folder = []
     self.children_other = []
-    self.__dict_children_file = {} # key = name
-    self.__dict_children_folder = {} # key = name
-    self.__dict_children_other = {} # key = name
+    self.__dict_children_file = {}  # key = name
+    self.__dict_children_folder = {}  # key = name
+    self.__dict_children_other = {}  # key = name
 
     self.next_link_children = None
 
@@ -259,7 +259,7 @@ class MsFolderInfo(MsObject):
     elif isinstance(child, MsFileInfo):
       self.children_file.remove(child)
       self.__dict_children_file.pop(child.name)
-    else: #isinstance(child, MsOtherInfo):
+    else:  # isinstance(child, MsOtherInfo):
       self.children_other.remove(child)
       self.__dict_children_other.pop(child.name)
 
@@ -301,7 +301,8 @@ class MsFolderInfo(MsObject):
           self.__add_file_info_if_necessary(fi)
 
         elif not only_folders and 'package' in c:
-          fi = ObjectInfoFactory.MsOtherInfoFromMgcResponse(self.__mgc, c, self)
+          fi = ObjectInfoFactory.MsOtherInfoFromMgcResponse(
+              self.__mgc, c, self)
           self.__add_other_info_if_necessary(fi)
 
         # else:   - isFolder and folder already retrieved
@@ -398,7 +399,7 @@ class MsFolderInfo(MsObject):
       self.__add_folder_info_if_necessary(object_info)
     elif isinstance(object_info, MsFileInfo):
       self.__add_file_info_if_necessary(object_info)
-    else: # isinstance(object_info, MsOtherInfo):
+    else:  # isinstance(object_info, MsOtherInfo):
       self.__add_other_info_if_necessary(object_info)
 
   def get_direct_child_folder(
@@ -482,9 +483,9 @@ class MsFolderInfo(MsObject):
     return self.__dict_children_other[other_name] if other_name in self.__dict_children_other else None
 
   def get_child_other(
-      self,
-      relative_other_path,
-      force_children_retrieval=False):
+          self,
+          relative_other_path,
+          force_children_retrieval=False):
     path_parts = relative_other_path.split(os.sep)
     search_folder = self
     i = 0
@@ -509,7 +510,7 @@ class MsFolderInfo(MsObject):
         relative_file_path,
         force_children_retrieval) is not None
 
-  def relative_path_is_other( # Child but not a file neither a folder
+  def relative_path_is_other(  # Child but not a file neither a folder
           self,
           relative_path,
           force_children_retrieval=False):
@@ -557,7 +558,7 @@ class MsFolderInfo(MsObject):
 
 class MsFileInfo(MsObject):
   def __init__(self, name, parent_path, mgc, file_id,
-          size, qxh, s1h, cdt, lmdt, parent=None):
+               size, qxh, s1h, cdt, lmdt, parent=None):
     # qxh = quickxorhash
     super().__init__(parent, name, parent_path, file_id, size, lmdt, cdt)
     self.mgc = mgc
@@ -598,7 +599,7 @@ class MsFileInfo(MsObject):
 class MsOtherInfo(MsObject):
 
   def __init__(self, name, parent_path, mgc, ms_id,
-          size, cdt, lmdt, type_other, parent=None):
+               size, cdt, lmdt, type_other, parent=None):
     super().__init__(parent, name, parent_path, ms_id, size, lmdt, cdt)
     self.mgc = mgc
     self.type_other = type_other  # "type" is a reserved keyword
@@ -679,35 +680,51 @@ class ObjectInfoFactory:
   class ObjectRetrievalException(Exception):
 
     def __init__(self, error_code):
-      super().__init__(f"Object Retrieval Exception, error_code = {error_code}")
+      super().__init__(
+          f"Object Retrieval Exception, error_code = {error_code}")
       self.error_code = error_code
 
   @staticmethod
-  def get_object_info_from_mgc_response(mgc,
-                      mgc_response,
-                      parent=None,
-                      no_warn_if_no_parent=False,
-                      no_update_and_get_from_global_dict=False) -> MsObject:
+  def get_object_info_from_mgc_response(
+          mgc,
+          mgc_response,
+          parent=None,
+          no_warn_if_no_parent=False,
+          no_update_and_get_from_global_dict=False) -> MsObject:
     if 'error' in mgc_response:
-      raise ObjectInfoFactory.ObjectRetrievalException(mgc_response['error']['code'])
+      raise ObjectInfoFactory.ObjectRetrievalException(
+          mgc_response['error']['code'])
 
     if ('folder' in mgc_response):
       mso = ObjectInfoFactory.MsFolderFromMgcResponse(
-          mgc, mgc_response, parent, no_warn_if_no_parent, no_update_and_get_from_global_dict)
+          mgc,
+          mgc_response,
+          parent,
+          no_warn_if_no_parent,
+          no_update_and_get_from_global_dict)
     elif ('file' in mgc_response):
       mso = ObjectInfoFactory.MsFileInfoFromMgcResponse(
-          mgc, mgc_response, parent, no_warn_if_no_parent, no_update_and_get_from_global_dict)
+          mgc,
+          mgc_response,
+          parent,
+          no_warn_if_no_parent,
+          no_update_and_get_from_global_dict)
     else:
       mso = ObjectInfoFactory.MsOtherInfoFromMgcResponse(
-          mgc, mgc_response, parent, no_warn_if_no_parent, no_update_and_get_from_global_dict)
+          mgc,
+          mgc_response,
+          parent,
+          no_warn_if_no_parent,
+          no_update_and_get_from_global_dict)
     return mso
 
   @staticmethod
-  def get_object_info_from_path(mgc,
-                      path,
-                      parent=None,
-                      no_warn_if_no_parent=False,
-                      no_update_and_get_from_global_dict=False) -> MsObject:
+  def get_object_info_from_path(
+          mgc,
+          path,
+          parent=None,
+          no_warn_if_no_parent=False,
+          no_update_and_get_from_global_dict=False) -> MsObject:
     """
       Return a 2-tuple (<error_code>, <object_info>).
       If error_code is not None, object is None and error_code is set code of response sent by Msgraph.
@@ -745,7 +762,8 @@ class ObjectInfoFactory:
           mgc,
           mgc_response_json,
           parent=None,
-          no_warn_if_no_parent=False, no_update_and_get_from_global_dict=False)->MsFolderInfo:
+          no_warn_if_no_parent=False,
+          no_update_and_get_from_global_dict=False) -> MsFolderInfo:
 
     # Workaround following what seems to be a bug. Space is replaced by "%20" sequence
     #   in mgc_response when parent name contains a space
@@ -821,7 +839,8 @@ class ObjectInfoFactory:
           mgc,
           mgc_response_json,
           parent=None,
-          no_warn_if_no_parent=False, no_update_and_get_from_global_dict=False)->MsFileInfo:
+          no_warn_if_no_parent=False,
+          no_update_and_get_from_global_dict=False) -> MsFileInfo:
     if parent is None and not no_warn_if_no_parent:
       lg.warning(
           "[MsFileFromMgcResponse]No parent folder to create a file info")
@@ -851,7 +870,7 @@ class ObjectInfoFactory:
       parent._MsFolderInfo__add_file_info_if_necessary(result)
 
     if not no_update_and_get_from_global_dict:
-      result =DictMsObject.add_or_get_update(result)
+      result = DictMsObject.add_or_get_update(result)
     return result
 
   @staticmethod
@@ -859,14 +878,15 @@ class ObjectInfoFactory:
           mgc,
           mgc_response_json,
           parent=None,
-          no_warn_if_no_parent=False, no_update_and_get_from_global_dict=False)->MsOtherInfo:
+          no_warn_if_no_parent=False,
+          no_update_and_get_from_global_dict=False) -> MsOtherInfo:
     if parent is None and not no_warn_if_no_parent:
       lg.warning(
           "[MsOtherInfoFromMgcResponse]No parent folder to create a other info")
 
     ms_id = mgc_response_json['id']
     if ('package' in mgc_response_json
-        and 'type' in mgc_response_json['package']):
+            and 'type' in mgc_response_json['package']):
       type_other = mgc_response_json['package']['type']
     else:
       type_other = 'unknown'

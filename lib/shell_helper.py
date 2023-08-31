@@ -37,6 +37,7 @@ except ModuleNotFoundError as e:
 
 lg = logging.getLogger('odc.browser')
 
+
 class CommonCompleter:
   """ Class to gather methods used in SubCompleter
   """
@@ -750,7 +751,9 @@ class OneDriveShell:
       return
     self.current_fi = self.root_folder
     self.only_folders = False
-    self.ls_formatter = LsFormatter(MsNoFolderFormatter(20), MsFolderFormatter(20))
+    self.ls_formatter = LsFormatter(
+        MsNoFolderFormatter(20),
+        MsFolderFormatter(20))
     self.cp = Completer(self)
     self.initiate_commands()
     # Lock to ensure no simultaneousity of command launch, completion and
@@ -1054,7 +1057,7 @@ class OneDriveShell:
     self.__args_parser = myparser
 
     # Populate commands
-    self.dict_cmds:dict[str,OneDriveShell.Command] = {}
+    self.dict_cmds: dict[str, OneDriveShell.Command] = {}
     add_new_cmd('cd', sp_cd, action_cd, SubCompleterChildren(
         self, only_folder=True))
     add_new_cmd('ls', sp_ls, action_ls, SubCompleterChildren(
@@ -1076,7 +1079,9 @@ class OneDriveShell:
     add_new_cmd('!cd', sp_l_cd, action_l_cd, SubCompleterLocalCommand())
 
   def change_max_column_size(self, nb):
-    self.ls_formatter = LsFormatter(MsNoFolderFormatter(nb), MsFolderFormatter(nb))
+    self.ls_formatter = LsFormatter(
+        MsNoFolderFormatter(nb),
+        MsFolderFormatter(nb))
 
   def change_current_folder_to_parent(self):
     if self.current_fi.parent is not None:

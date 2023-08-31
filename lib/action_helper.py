@@ -34,7 +34,10 @@ def action_get_children(
   folder_info = OIF.get_object_info_from_path(
       mgc, folder, no_warn_if_no_parent=True)
   folder_info.retrieve_children_info(recursive=False, depth=0)
-  ls_formatter = LsFormatter(MsNoFolderFormatter(60), MsFolderFormatter(60), False)
+  ls_formatter = LsFormatter(
+      MsNoFolderFormatter(60),
+      MsFolderFormatter(60),
+      False)
   if long_format:
     ls_formatter.print_folder_children_long(
         folder_info,
@@ -42,8 +45,8 @@ def action_get_children(
         with_pagination=with_pagination)
   else:
     ls_formatter.print_folder_children_lite(folder_info,
-        only_folders=False,
-        with_pagination=with_pagination)
+                                            only_folders=False,
+                                            with_pagination=with_pagination)
 
 
 @beartype
@@ -103,7 +106,8 @@ def action_mdownload(
   if file_with_exclusion is None:
     files_to_be_excluded = set()
   else:
-    files_to_be_excluded = set(l.strip() for l in open(file_with_exclusion).readlines())
+    files_to_be_excluded = set(l.strip()
+                               for l in open(file_with_exclusion).readlines())
   bulk_folder_download(mgc, folder_path, dest_path,
                        max_depth, skip_warning,
                        files_to_be_excluded=files_to_be_excluded)
@@ -124,7 +128,7 @@ def action_remove(mgc: MsGraphClient, file_path: str):
 def action_get_info(mgc: MsGraphClient, remote_path: str):
   try:
     r = OIF.get_object_info_from_path(
-      mgc, remote_path, no_warn_if_no_parent=True)
+        mgc, remote_path, no_warn_if_no_parent=True)
     print(r.str_full_details())
   except OIF.ObjectRetrievalException:
     print("Object not found")

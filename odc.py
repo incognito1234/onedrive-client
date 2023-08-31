@@ -133,7 +133,7 @@ if __name__ == '__main__':
         args.depth,
         args.n,
         file_with_exclusion=None if args.X == '' else args.X
-  )
+    )
 
   if args.command == "mv":
     action_move(mgc, args.srcpath, args.dstpath)

@@ -28,7 +28,7 @@ def bulk_folder_download(
         dest_path: str,
         max_depth: int,
         skip_warning: bool = False,
-        files_to_be_excluded: Optional[set] = None): # str[]
+        files_to_be_excluded: Optional[set] = None):  # str[]
   lg.debug(
       f"bulk_folder_download - folder = '{folder_path}'"
       f" - dest_path = {dest_path} - depth = '{max_depth}'")
@@ -46,18 +46,20 @@ def bulk_folder_download(
 
     remote_object.retrieve_children_info(recursive=True, depth=max_depth)
     non_downloadable_files = mdownload_folder(
-      mgc, remote_object, dest_path, depth=max_depth,
-      files_to_be_excluded=files_to_be_excluded)
+        mgc, remote_object, dest_path, depth=max_depth,
+        files_to_be_excluded=files_to_be_excluded)
     if len(non_downloadable_files) > 0 and not skip_warning:
-      print("WARN: some non downloadable files have been found and skipped:", file=sys.stderr)
+      print(
+          "WARN: some non downloadable files have been found and skipped:",
+          file=sys.stderr)
       for ndf in non_downloadable_files:
         print(f"  {ndf.path} ({ndf.type_other})")
-
 
   except OIF.ObjectRetrievalException:
     lg.error(
         f"[bulk_folder_download]folder '{dest_path}' does not exist")
     return False
+
 
 @beartype
 def mdownload_folder(
@@ -66,7 +68,7 @@ def mdownload_folder(
         dest_path: str,
         depth: int = 999,
         list_tqdm: list = [],
-        files_to_be_excluded: Optional[set] = None): # str[]
+        files_to_be_excluded: Optional[set] = None):  # str[]
   """
     Return list of file_info non downloadable
   """
@@ -135,9 +137,9 @@ def mdownload_folder(
   if depth > 1:
     for cf in ms_folder.children_folder:
       non_downloadable_files.extend(
-        mdownload_folder(
-            mgc, cf, f"{dest_path}/{cf.name}", depth - 1, list_tqdm,
-            files_to_be_excluded=files_to_be_excluded)
+          mdownload_folder(
+              mgc, cf, f"{dest_path}/{cf.name}", depth - 1, list_tqdm,
+              files_to_be_excluded=files_to_be_excluded)
       )
 
       # last_tqdm.close()

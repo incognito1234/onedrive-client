@@ -88,17 +88,17 @@ class MsGraphClient:
 
     return (ms_response.json()['value'], next_link)
 
-  def __tqdm_timer(self,sec: int, pos: int):
-      t = tqdm(
-              desc=f'Server is throttled - Wait {sec}s ',
-              total=sec,
-              bar_format='{desc}: {elapsed} ({percentage:2.0f}%)',
-              position=pos,
-              leave=False)
-      st = time.time()
-      for i in range(sec):
-          time.sleep(1)
-          t.update(1)
+  def __tqdm_timer(self, sec: int, pos: int):
+    t = tqdm(
+        desc=f'Server is throttled - Wait {sec}s ',
+        total=sec,
+        bar_format='{desc}: {elapsed} ({percentage:2.0f}%)',
+        position=pos,
+        leave=False)
+    st = time.time()
+    for i in range(sec):
+      time.sleep(1)
+      t.update(1)
 
   def download_file_content(
           self,
@@ -136,14 +136,14 @@ class MsGraphClient:
         except Exception as ex:
           nb_retry_exception += 1
           lg.error(
-            f"Exception during download_file_content({dst_path}) - "
-            f"{ex=} - {type(ex)=} - Wait 10 seconds"
+              f"Exception during download_file_content({dst_path}) - "
+              f"{ex=} - {type(ex)=} - Wait 10 seconds"
           )
           if nb_retry_exception < 3:
             time.sleep(10)
           else:
-            lg.info( "A new exception occured and max retries (3) has been"
-                     "reached. Exit function")
+            lg.info("A new exception occured and max retries (3) has been"
+                    "reached. Exit function")
             return 0
 
       if r.ok:
@@ -242,7 +242,6 @@ class MsGraphClient:
   def raw_command(self, cmd):
     result = self.mgc.get(f"{MsGraphClient.graph_url}{cmd}")
     return result
-
 
   def put_file_content(
           self,
