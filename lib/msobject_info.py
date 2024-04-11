@@ -261,7 +261,8 @@ class MsFolderInfo(MsObject):
           self,
           only_folders=False,
           recursive=False,
-          depth=999):
+          depth=999,
+          use_next_link=None):
     lg.debug(
         f"[retrieve_children_info] {self.path} - only_folders = {only_folders} - depth = {depth}")
 
@@ -270,8 +271,12 @@ class MsFolderInfo(MsObject):
         or not self.files_retrieval_has_started() or not self.folders_retrieval_has_started()
     ):
 
-      (ms_response, next_link) = self.__mgc.get_ms_response_for_children_folder_path(
-          self.path, only_folders)
+      if use_next_link is None:
+        (ms_response, next_link) = self.__mgc.get_ms_response_for_children_folder_path(
+            self.path, only_folders)
+      else:
+        (ms_response, next_link) = self.__mgc.get_ms_response_for_children_folder_path_from_link(
+          use_next_link, only_folders)
 
       if ms_response is None:  # Can occurs if folder has change name
         return
@@ -301,6 +306,10 @@ class MsFolderInfo(MsObject):
         self.__children_files_retrieval_status = "partial" if self.next_link_children is not None else "all"
 
       self.__children_folders_retrieval_status = "partial" if self.next_link_children is not None else "all"
+
+      if self.next_link_children:
+        self.retrieve_children_info(only_folders=only_folders, recursive=recursive, depth=depth,
+                                    use_next_link=self.next_link_children)
 
   def retrieve_children_info_next(
           self,
