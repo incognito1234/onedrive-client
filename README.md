@@ -51,7 +51,7 @@ ODC has been tested with the following environment
 - Personal Microsoft account
 
 Progress bar can be enabled when a large file or a complete folder is uploaded or downloaded. This feature needs `tqdm` python module.
-Differential uploading and downloading (`mput` and `mget` comands) are available if a`quickxorhash` command is available in `PATH` variable.
+Differential uploading and downloading (`mput` and `mget` comands) are available if a`quickxorhash` command is available in `PATH` variable or if `quickxorhash` python module is installed.
 
 ## Installation
 
@@ -126,6 +126,7 @@ _Only main changes are listed here_
 - Improve error management during download
 - Add exclusion list as an option of mget command
 - Consider drive object which are not file or folder (could be a Notebook)
+- Use quickxorhash module if available (Thanks [wienand](https://github.com/incognito1234/onedrive-client/pull/5))
 
 ### Version 1.2
 - Consider error when downloading file with re-try mechanisms

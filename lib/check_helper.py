@@ -1,9 +1,15 @@
 #  Copyright 2019-2023 Jareth Lomson <jareth.lomson@gmail.com>
 #  This file is part of OneDrive Client Program which is released under MIT License
 #  See file LICENSE for full license details
+import base64
 import subprocess
 import os
 from shutil import which
+
+try:
+  import quickxorhash as qxh
+except ImportError:
+  qxh = None
 
 
 class quickxorhash:
@@ -13,7 +19,17 @@ class quickxorhash:
   def __init__(self):
     self.program = which(self.__COMMAND_NAME)
 
-  def quickxorhash(self, filename):
+  def quickxorhash(self, filename, force_process = False):
+    if qxh is not None and not force_process:
+      chunksize = 1024 * 1024
+      h = qxh.quickxorhash()
+      with open(filename, 'rb') as datafile:
+          while True:
+              chunk = datafile.read(chunksize)
+              if chunk == b'':
+                  break
+              h.update(chunk)
+      return base64.b64encode(h.digest()).decode('utf8')
 
     if self.program is not None:
       p = subprocess.run([self.program, filename], stdout=subprocess.PIPE)
@@ -23,6 +39,7 @@ class quickxorhash:
         return str(p.stdout, 'utf-8')[:-1]
     else:
       return None
+
 
   # How to get quickxorhash command
   #
