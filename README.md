@@ -60,14 +60,15 @@ Differential uploading and downloading (`mput` and `mget` comands) are available
 - Register an application with the following properties
 
       Supported account types      Personal Microsoft accounts only
+      Platform                     Web
       Redirect URI                 https://localhost:8000/auth/redirect
 
 
 - Create a secret assigned to this application
 
 > Tip to register an application on azure portal
-> *Oct 2022 process*
-> `portal.azure.com` ⇨ `Azure Active Directory` ⇨`App Registration`
+> *Jul 7 2024 process*
+> `portal.azure.com` ⇨ `Microsoft Entra ID` ⇨`App Registrations`
 
 
 ### On client computer
@@ -127,6 +128,7 @@ _Only main changes are listed here_
 - Add exclusion list as an option of mget command
 - Consider drive object which are not file or folder (could be a Notebook)
 - Use quickxorhash module if available (Thanks [wienand](https://github.com/incognito1234/onedrive-client/pull/5))
+- Add max_retrieved_children in `ls` command to list folders with more than 200 children
 
 ### Version 1.2
 - Consider error when downloading file with re-try mechanisms
