@@ -80,6 +80,12 @@ def parse_odc_args(default_action):
       action="store_true",
       default=False,
       help='long format')
+  parser_get_children.add_argument(
+      '--maxchildren',
+      '-n',
+      type=int,
+      default=200,
+      help='Max number retrieved children. The next multiple of 200 will be considered. Default 200')
   parser_get_children.set_defaults(command="ls")
 
   parser_browse = sub_parsers.add_parser(

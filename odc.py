@@ -108,7 +108,7 @@ if __name__ == '__main__':
   if args.command == "ls":
     # TODO Add a warning if listed folder has more than 200 elements
     # TODO Add a option to retrieved all elements
-    action_get_children(mgc, args.folder, args.p, args.l)
+    action_get_children(mgc, args.folder, args.p, args.l, args.maxchildren)
 
   if args.command == "put":
     action_upload(mgc, args.dstpath, args.srcfile, args.withprogressbar)

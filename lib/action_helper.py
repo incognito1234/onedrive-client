@@ -29,11 +29,13 @@ def action_get_children(
         mgc: MsGraphClient,
         folder: str,
         with_pagination: bool,
-        long_format: bool):
+        long_format: bool,
+        max_retrieved_children: int = 200):
   # TODO Make column sizes adaptative
   folder_info = OIF.get_object_info_from_path(
       mgc, folder, no_warn_if_no_parent=True)
-  folder_info.retrieve_children_info(recursive=False, depth=0)
+  folder_info.retrieve_children_info(
+      recursive=False, depth=0, max_retrieved_children=max_retrieved_children )
   ls_formatter = LsFormatter(
       MsNoFolderFormatter(60),
       MsFolderFormatter(60),
@@ -42,11 +44,14 @@ def action_get_children(
     ls_formatter.print_folder_children_long(
         folder_info,
         only_folders=False,
-        with_pagination=with_pagination)
+        with_pagination=with_pagination,
+        max_retrieved_children=max_retrieved_children)
   else:
-    ls_formatter.print_folder_children_lite(folder_info,
-                                            only_folders=False,
-                                            with_pagination=with_pagination)
+    ls_formatter.print_folder_children_lite(
+        folder_info,
+        only_folders=False,
+        with_pagination=with_pagination,
+        max_retrieved_children=max_retrieved_children)
 
 
 @beartype

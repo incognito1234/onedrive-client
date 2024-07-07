@@ -15,6 +15,7 @@ from lib.datetime_helper import utc_dt_from_str_ms_datetime, utc_dt_now
 from lib.strpathutil import StrPathUtil
 from threading import Lock
 
+
 lg = logging.getLogger('odc.msobject')
 
 
@@ -241,6 +242,13 @@ class MsFolderInfo(MsObject):
 
     self.__add_default_folder_info()
 
+  def get_nb_retrieved_children(self):
+    return (
+      len(self.children_file)
+      + len(self.children_folder)
+      + len(self.children_other)
+      )
+
   def update_parent(self, new_parent):
     super().update_parent(new_parent)
     self.__dict_children_folder[".."] = self.parent
@@ -267,21 +275,33 @@ class MsFolderInfo(MsObject):
           self,
           only_folders=False,
           recursive=False,
-          depth=999):
+          depth=999,
+          max_retrieved_children=200):
     lg.debug(
         f"[retrieve_children_info] {self.path} - only_folders = {only_folders} - depth = {depth} - "
-        f"{self.__children_files_retrieval_status=} - {self.__children_folders_retrieval_status=}")
+        f"max_retrieved_children = {max_retrieved_children} -"
+        f" - {self.get_nb_retrieved_children()} - {self.child_count=}")
 
-    if depth > 0 and (
-        only_folders and not self.folders_retrieval_has_started()
-        or not self.files_retrieval_has_started() or not self.folders_retrieval_has_started()
+    if depth >= 0 and (
+        not self.files_retrieval_has_started() and not only_folders
+        or not self.folders_retrieval_has_started()
+        or (
+          self.get_nb_retrieved_children() < self.child_count
+          and self.get_nb_retrieved_children() < max_retrieved_children
+        )
     ):
+      nb_retrieved_children_start = self.get_nb_retrieved_children()
 
-      (ms_response, next_link) = self.__mgc.get_ms_response_for_children_folder_path(
-          self.path, only_folders)
+      if self.next_link_children is None:
+        (ms_response, next_link) = self.__mgc.get_ms_response_for_children_folder_path(
+            self.path, only_folders)
+      else:
+        (ms_response, next_link) = self.__mgc.get_ms_response_for_children_folder_path_from_link(
+          self.next_link_children)
 
-      if ms_response is None:  # Can occurs if folder has change name
-        return
+      if ms_response is None:  # Can occurs if folder name has changed
+        lg.warning("[retrieve_children_info]Warning - response is None")
+        return (None, None)
 
       self.next_link_children = next_link
 
@@ -294,7 +314,8 @@ class MsFolderInfo(MsObject):
             fi.retrieve_children_info(
                 only_folders=only_folders,
                 recursive=recursive,
-                depth=depth - 1)
+                depth=depth - 1,
+                max_retrieved_children=max_retrieved_children)
 
         elif not only_folders and 'file' in c:
           fi = ObjectInfoFactory.MsFileInfoFromMgcResponse(self.__mgc, c, self)
@@ -315,6 +336,15 @@ class MsFolderInfo(MsObject):
 
       self.__children_folders_retrieval_status = "partial" if self.next_link_children is not None else "all"
 
+      if (
+        self.next_link_children
+        and self.get_nb_retrieved_children() < self.child_count
+        and self.get_nb_retrieved_children() < max_retrieved_children
+        and nb_retrieved_children_start != self.get_nb_retrieved_children()
+      ):
+        self.retrieve_children_info(only_folders=only_folders, recursive=recursive, depth=depth,
+                                    max_retrieved_children=max_retrieved_children)
+
   def retrieve_children_info_next(
           self,
           only_folders=False,
@@ -329,7 +359,7 @@ class MsFolderInfo(MsObject):
     ):
 
       (ms_response, next_link) = self.__mgc.get_ms_response_for_children_folder_path_from_link(
-          self.next_link_children, only_folders)
+          self.next_link_children)
       self.next_link_children = next_link
 
       for c in ms_response:
@@ -344,7 +374,7 @@ class MsFolderInfo(MsObject):
                 depth=depth - 1)
 
         elif not only_folders and not isFolder:
-          fi = ObjectInfoFactory.MsFileInfoFromMgcResponse(self.__mgc, c)
+          fi = ObjectInfoFactory.MsFileInfoFromMgcResponse(self.__mgc, c, self)
           self.__add_file_info_if_necessary(fi)
         else:
           lg.info("retrieve_children_info : UNKNOWN RESPONSE")

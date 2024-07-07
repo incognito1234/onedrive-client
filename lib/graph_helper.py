@@ -60,14 +60,16 @@ class MsGraphClient:
       fp = f"{MsGraphClient.graph_url}/me/drive/root/children"
     else:
       fp = f"{MsGraphClient.graph_url}/me/drive/root:{folder_path}:/children"
-    return self.get_ms_response_for_children_folder_path_from_link(
-        fp, only_folder)
+    return self.get_ms_response_for_children_folder_path_from_link(fp)
 
   def get_ms_response_for_children_folder_path_from_link(
           self, link, only_folder=False):
     """ Get response value of ms graph for getting children info of a onedrive folder from a given link
     """
-
+    lg.debug(
+        f"[get_ms_response_for_children_folder_path_from_link]Starting. link = "
+        f"{link}"
+        )
     # folder_path must start with '/'
     if only_folder:
       param_urls = {
@@ -77,16 +79,21 @@ class MsGraphClient:
       param_urls = ()
 
     ms_response = self.mgc.get(link, params=param_urls)
-
-    if 'error' in ms_response:
+    ms_response = self.mgc.get(link)
+    ms_response_json = ms_response.json()
+    if 'error' in ms_response_json:
+      lg.warn(
+        f"[get_ms_response_for_children_folder_path_from_link]Error received. Return None"
+        f" - response = {ms_response_json}"
+        f" - link = {link}")
       return None
     else:
-      if "@odata.nextLink" in ms_response.json():
-        next_link = ms_response.json()["@odata.nextLink"]
+      if "@odata.nextLink" in ms_response_json:
+        next_link = ms_response_json["@odata.nextLink"]
       else:
         next_link = None
 
-    return (ms_response.json()['value'], next_link)
+    return (ms_response_json['value'], next_link)
 
   def __tqdm_timer(self, sec: int, pos: int):
     t = tqdm(
