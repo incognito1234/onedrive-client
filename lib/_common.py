@@ -1,8 +1,8 @@
-#  Copyright 2019-2023 Jareth Lomson <jareth.lomson@gmail.com>
+#  Copyright 2019-2024 Jareth Lomson <jareth.lomson@gmail.com>
 #  This file is part of OneDrive Client Program which is released under MIT License
 #  See file LICENSE for full license details
 
-VERSION = "1.2.0"
+VERSION = "1.3.0"
 PROGRAM_NAME = "OneDrive Client Program"
 
 
