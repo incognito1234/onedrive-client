@@ -1055,8 +1055,6 @@ class OneDriveShell:
         'dstpath',
         type=str,
         help='Destination path of file or folder')
-    sp_pwd = sub_parser.add_parser(
-        'pwd', description='Print full path of the current folder')
     sp_stat = sub_parser.add_parser(
         'stat', description='Get info about object')
     sp_stat.add_argument('remotepath', type=str, help='destination object')
