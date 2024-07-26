@@ -11,6 +11,7 @@ import sys
 import time
 import traceback
 from abc import ABC, abstractmethod
+from datetime import datetime as dt
 from io import StringIO
 from pprint import pprint
 from threading import Event, Thread, Lock
@@ -1268,6 +1269,15 @@ class InfoFormatter(ABC):
   def format_lite(self, what):
     return "default"
 
+  @staticmethod
+  def format_last_modified_datetime(msoi: MsObject)->str:
+    fmdt = msoi.last_modified_datetime
+    delta = dt.now() - fmdt.replace(tzinfo=None)
+    if delta.days > 6 * 30: # ~6 months
+      result = fmdt.strftime(f"%b %d ") + f"{fmdt.year: >5}"
+    else:
+      result = fmdt.strftime("%b %d %H:%M")
+    return result
 
 class MsFolderFormatter(InfoFormatter):
 
@@ -1278,7 +1288,8 @@ class MsFolderFormatter(InfoFormatter):
   def format(self, what: MsFolderInfo):
     status_subfolders = "<subfolders ok>" if what.folders_retrieval_has_started() else ""
     status_subfiles = "<subfiles ok>" if what.files_retrieval_has_started() else ""
-    fmdt = what.last_modified_datetime.strftime("%b %d %H:%M")
+
+    fmdt = InfoFormatter.format_last_modified_datetime(what)
 
     if len(what.name) < self.max_name_size:
       fname = FormattedString.build_from_colorized_string(
@@ -1312,7 +1323,7 @@ class MsNoFolderFormatter(InfoFormatter):
   def format(self, what: MsObject):
     fname = f"{what.name}" if len(
         what.name) < self.max_name_size else f"{what.name[:self.max_name_size - 5]}..."
-    fmdt = what.last_modified_datetime.strftime("%b %d %H:%M")
+    fmdt = InfoFormatter.format_last_modified_datetime(what)
     result = FormattedString.concat(
         f"{what.size:>12}  {fmdt}  ",
         alignleft(

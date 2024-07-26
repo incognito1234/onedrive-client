@@ -123,6 +123,9 @@ Differential uploading and downloading (`mput` and `mget` comands) are available
 ## Changelog
 _Only main changes are listed here_
 
+### Version 1.4
+- While listing folder, print year if last modification is older than 6 months
+
 ### Version 1.3
 - Improve error management during download
 - Add exclusion list as an option of mget command
