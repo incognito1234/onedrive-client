@@ -44,7 +44,9 @@ def bulk_folder_download(
           f"[bulk_folder_download]'{dest_path}' is a file")
       return False
 
-    remote_object.retrieve_children_info(recursive=True, depth=max_depth)
+    remote_object.retrieve_children_info(
+            recursive=True, depth=max_depth,
+            max_retrieved_children=99999)
     non_downloadable_files = mdownload_folder(
         mgc, remote_object, dest_path, depth=max_depth,
         files_to_be_excluded=files_to_be_excluded)
