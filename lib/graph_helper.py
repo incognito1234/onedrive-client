@@ -288,7 +288,6 @@ class MsGraphClient:
       url = f"{MsGraphClient.graph_url}/me/drive/root:/{dst_folder}/{file_name}:/createUploadSession"
       data = {
           "item": {
-              "@odata.type": "microsoft.graph.driveItemUploadableProperties",
               "@microsoft.graph.conflictBehavior": "replace"
           }
       }
@@ -369,7 +368,8 @@ class MsGraphClient:
             r = self.mgc.put(
                 uurl,
                 headers=headers,
-                data=current_stream)
+                data=current_stream,
+                withhold_token=True)
           status_code_put = r.status_code
           if ((status_code_put in (500, 502, 503, 504)) or (simu_error)):
             # 500 - Internal Server Error - 502: Bad Gateway - 503: Service
