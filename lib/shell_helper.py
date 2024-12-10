@@ -444,7 +444,7 @@ class DeltaChecker():
     r = self.mgc.mgc.get(query_string)
     self.delta_link = r.json()["@odata.deltaLink"]
 
-    self.items_to_be_process = []
+    self.items_to_be_processed = []
     self.lg = logging.getLogger("odc.browser.checkdelta")
 
   def get_diffs(self):
@@ -454,7 +454,7 @@ class DeltaChecker():
       r = self.mgc.mgc.get(query_string)
       items_json = r.json()
       current_items_list = items_json['value']
-      self.items_to_be_process += current_items_list
+      self.items_to_be_processed += current_items_list
       i = i + 1
       if "@odata.nextLink" in items_json:
         query_string = items_json["@odata.nextLink"]
@@ -520,7 +520,7 @@ class DeltaChecker():
       Create folder info if parent exists.
       self.__new_parent_to_be_processed is updated
     """
-    # diff_item MUST be a file file item
+    # diff_item MUST be a folder item
 
     # 0 - Check that requisites are completed
     if self.lg.level >= logging.DEBUG:
@@ -541,15 +541,18 @@ class DeltaChecker():
       self.lg.warning(f"No folder object found '{diff_item['name']}'")
       return
 
-    # 3 - Update file info if necessary and create it if parent exists
-    parent_id = diff_item["parentReference"]["id"]
-
-    msobj_new_parent = DictMsObject.get(parent_id)
-
+    # 3 - Update folder info if necessary and create it if parent exists
     if msobj is not None:
       self.lg.debug(f"Known folder has been updated - obj = {msobj.path}")
       OIF.UpdateMsFolderInfo(msobj, fi_ref)
 
+    # 4 - Update parent if msobj is not root
+    if 'root' in diff_item:
+      # Delta item received for root folder. Skip parent update
+      return
+
+    parent_id = diff_item["parentReference"]["id"]
+    msobj_new_parent = DictMsObject.get(parent_id)
     if msobj is None and msobj_new_parent is not None:
       self.lg.debug(f"Unknown folder but parent exists."
                     f"parent = {msobj_new_parent.path}")
@@ -582,25 +585,33 @@ class DeltaChecker():
       new_parent.add_object_info(msobj)
 
   def process_diffs(self):
-
-    deleted_item_to_be_process = list(
-        filter(lambda x: "deleted" in x, self.items_to_be_process))
+    # Noted on December 12, 2024
+    #
+    #  - When a file is created or modified delta is received for new file and all ascendant folders
+    #  - When a file is deleted, delta item contains file info about file deleted and delta for root
+    #  - In any case, folder information (size and nb of children) is updated a few minutes later
+    self.lg.debug(f"items_to_be_process = {self.items_to_be_processed}")
+    deleted_item_to_be_processed = list(
+        filter(lambda x: "deleted" in x, self.items_to_be_processed))
     folders_to_be_processed = list(
         filter(lambda x: "folder" in x and "deleted" not in x,
-               self.items_to_be_process))
+               self.items_to_be_processed))
     files_to_be_processed = list(
         filter(lambda x: "file" in x and "deleted" not in x,
-               self.items_to_be_process))
+               self.items_to_be_processed))
+    self.lg.debug(f"nb deleted = {len(deleted_item_to_be_processed)}. "
+                  f"nb folders = {len(folders_to_be_processed)}. "
+                  f"nb files = {len(files_to_be_processed)}")
     # list of tuple of (msobj, new_parent_obj)
     self.__new_parentship_to_be_processed = []
-    list(map(self.__process_diff_delete, deleted_item_to_be_process))
+    list(map(self.__process_diff_delete, deleted_item_to_be_processed))
     list(map(self.__process_diff_file, files_to_be_processed))
     list(map(self.__process_diff_folder, folders_to_be_processed))
     list(map(self.__process_parentship, self.__new_parentship_to_be_processed))
     self.__new_parentship_to_be_processed = None
 
   def reinit(self):
-    self.items_to_be_process = []
+    self.items_to_be_processed = []
 
 
 class ServerCheckDelta():
@@ -663,7 +674,7 @@ class ServerCheckDelta():
         with self.__lock_process:
           self.dc.get_diffs()
           # self.dc.print_last_diffs()
-          if len(self.dc.items_to_be_process) > 0:
+          if len(self.dc.items_to_be_processed) > 0:
             self.dc.process_diffs()
       except Exception as e:
         self.lg.error(f"Error during processing diff: {e}")
