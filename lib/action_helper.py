@@ -43,16 +43,13 @@ def action_get_children(
   if long_format:
     ls_formatter.print_folder_children_long(
         folder_info,
-        only_folders=False,
         with_pagination=with_pagination,
         max_retrieved_children=max_retrieved_children)
   else:
     ls_formatter.print_folder_children_lite(
         folder_info,
-        only_folders=False,
         with_pagination=with_pagination,
         max_retrieved_children=max_retrieved_children)
-
 
 @beartype
 def action_upload(

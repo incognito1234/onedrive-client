@@ -273,17 +273,16 @@ class MsFolderInfo(MsObject):
 
   def retrieve_children_info(
           self,
-          only_folders=False,
           recursive=False,
           depth=999,
           max_retrieved_children=200):
     lg.debug(
-        f"[retrieve_children_info] {self.path} - only_folders = {only_folders} - depth = {depth} - "
+        f"[retrieve_children_info] {self.path} - depth = {depth} - "
         f"max_retrieved_children = {max_retrieved_children} -"
         f" - {self.get_nb_retrieved_children()} - {self.child_count=}")
 
     if depth >= 0 and (
-        not self.files_retrieval_has_started() and not only_folders
+        not self.files_retrieval_has_started()
         or not self.folders_retrieval_has_started()
         or (
           self.get_nb_retrieved_children() < self.child_count
@@ -293,8 +292,8 @@ class MsFolderInfo(MsObject):
       nb_retrieved_children_start = self.get_nb_retrieved_children()
 
       if self.next_link_children is None:
-        (ms_response, next_link) = self.__mgc.get_ms_response_for_children_folder_path(
-            self.path, only_folders)
+        (ms_response, next_link) = self.__mgc.get_ms_response_for_children_from_folder_path(
+            self.path)
       else:
         (ms_response, next_link) = self.__mgc.get_ms_response_for_children_folder_path_from_link(
           self.next_link_children)
@@ -312,16 +311,15 @@ class MsFolderInfo(MsObject):
           self.__add_folder_info_if_necessary(fi)
           if recursive:
             fi.retrieve_children_info(
-                only_folders=only_folders,
                 recursive=recursive,
                 depth=depth - 1,
                 max_retrieved_children=max_retrieved_children)
 
-        elif not only_folders and 'file' in c:
+        elif 'file' in c:
           fi = ObjectInfoFactory.MsFileInfoFromMgcResponse(self.__mgc, c, self)
           self.__add_file_info_if_necessary(fi)
 
-        elif not only_folders and 'package' in c:
+        elif  'package' in c:
           fi = ObjectInfoFactory.MsOtherInfoFromMgcResponse(
               self.__mgc, c, self)
           self.__add_other_info_if_necessary(fi)
@@ -331,8 +329,7 @@ class MsFolderInfo(MsObject):
       lg.debug(
           f"[retrieve_children_info] {self.path} - setting retrieval status")
 
-      if not only_folders:
-        self.__children_files_retrieval_status = "partial" if self.next_link_children is not None else "all"
+      self.__children_files_retrieval_status = "partial" if self.next_link_children is not None else "all"
 
       self.__children_folders_retrieval_status = "partial" if self.next_link_children is not None else "all"
 
@@ -342,19 +339,18 @@ class MsFolderInfo(MsObject):
         and self.get_nb_retrieved_children() < max_retrieved_children
         and nb_retrieved_children_start != self.get_nb_retrieved_children()
       ):
-        self.retrieve_children_info(only_folders=only_folders, recursive=recursive, depth=depth,
+        self.retrieve_children_info(recursive=recursive, depth=depth,
                                     max_retrieved_children=max_retrieved_children)
 
   def retrieve_children_info_next(
           self,
-          only_folders=False,
           recursive=False,
           depth=999):
     lg.debug(
-        f"[retrieve_children_info_next] {self.path} - only_folders = {only_folders} - depth = {depth}")
+        f"[retrieve_children_info_next] {self.path} - depth = {depth}")
 
     if depth > 0 and (
-        only_folders and not self.__children_folders_retrieval_status != "all"
+        not self.__children_folders_retrieval_status != "all"
         or self.__children_folders_retrieval_status != "all"
     ):
 
@@ -369,22 +365,17 @@ class MsFolderInfo(MsObject):
           self.__add_folder_info_if_necessary(fi)
           if recursive:
             fi.retrieve_children_info(
-                only_folders=only_folders,
                 recursive=recursive,
                 depth=depth - 1)
 
-        elif not only_folders and not isFolder:
+        else:
           fi = ObjectInfoFactory.MsFileInfoFromMgcResponse(self.__mgc, c, self)
           self.__add_file_info_if_necessary(fi)
-        else:
-          lg.info("retrieve_children_info : UNKNOWN RESPONSE")
 
       lg.debug(
           f"[retrieve_children_info_from_link] {self.next_link_children} - setting retrieval status")
 
-      if not only_folders:
-        self.__children_files_retrieval_status = "partial" if self.next_link_children is not None else "all"
-
+      self.__children_files_retrieval_status = "partial" if self.next_link_children is not None else "all"
       self.__children_folders_retrieval_status = "partial" if self.next_link_children is not None else "all"
 
   def create_empty_subfolder(self, folder_name):
@@ -437,7 +428,7 @@ class MsFolderInfo(MsObject):
           folder_name,
           force_children_retrieval=False):
     if force_children_retrieval and not self.folders_retrieval_has_started():
-      self.retrieve_children_info(only_folders=True)
+      self.retrieve_children_info()
     return self.__dict_children_folder[folder_name] if folder_name in self.__dict_children_folder else None
 
   def get_child_folder(
@@ -458,7 +449,7 @@ class MsFolderInfo(MsObject):
 
   def get_direct_child_file(self, file_name, force_children_retrieval=False):
     if force_children_retrieval and not self.folders_retrieval_has_started():
-      self.retrieve_children_info(only_folders=False)
+      self.retrieve_children_info()
     return self.__dict_children_file[file_name] if file_name in self.__dict_children_file else None
 
   def get_child_file(
@@ -486,7 +477,7 @@ class MsFolderInfo(MsObject):
           folder_name,
           force_children_retrieval=False):
     if force_children_retrieval and not self.folders_retrieval_has_started():
-      self.retrieve_children_info(only_folders=True)
+      self.retrieve_children_info()
     return folder_name in self.__dict_children_folder
 
   def relative_path_is_a_folder(
@@ -499,17 +490,17 @@ class MsFolderInfo(MsObject):
 
   def is_direct_child_file(self, file_name, force_children_retrieval=False):
     if force_children_retrieval and not self.folders_retrieval_has_started():
-      self.retrieve_children_info(only_folders=False)
+      self.retrieve_children_info()
     return file_name in self.__dict_children_file
 
   def is_direct_child_other(self, other_name, force_children_retrieval=False):
     if force_children_retrieval and not self.folders_retrieval_has_started():
-      self.retrieve_children_info(only_folders=False)
+      self.retrieve_children_info()
     return other_name in self.__dict_children_other
 
   def get_direct_child_other(self, other_name, force_children_retrieval=False):
     if force_children_retrieval and not self.folders_retrieval_has_started():
-      self.retrieve_children_info(only_folders=False)
+      self.retrieve_children_info()
     return self.__dict_children_other[other_name] if other_name in self.__dict_children_other else None
 
   def get_child_other(

@@ -187,7 +187,7 @@ class SubCompleterChildren(SubCompleter):
     #   2. Append '/' to all folders
     #   3. Keep folders whose name starts with start_text
     #   4. Add escaped folder name
-    search_folder.retrieve_children_info(only_folders=self.__only_folder)
+    search_folder.retrieve_children_info()
     if self.__only_folder:
       all_children = search_folder.children_folder
     else:
@@ -767,7 +767,6 @@ class OneDriveShell:
     if not isinstance(self.root_folder, MsFolderInfo):
       return
     self.current_fi = self.root_folder
-    self.only_folders = False
     self.ls_formatter = LsFormatter(
         MsNoFolderFormatter(20),
         MsFolderFormatter(20))
@@ -826,13 +825,12 @@ class OneDriveShell:
         str_folder_children = (
             self.ls_formatter.format_folder_children_lite(
                 fi,
-                only_folders=self.only_folders,
                 recursive=args.r,
                 depth=args.d,
                 max_retrieved_children=args.maxchildren) if not args.l else self.ls_formatter.format_folder_children_long(
-                fi, only_folders=self.only_folders,
-                recursive=args.r, depth=args.d,
-                 max_retrieved_children=args.maxchildren))
+                    fi,
+                    recursive=args.r, depth=args.d,
+                    max_retrieved_children=args.maxchildren))
 
         lines_to_be_printed.append(str_folder_children)
       str_to_be_printed = '\n'.join(lines_to_be_printed)
@@ -840,7 +838,7 @@ class OneDriveShell:
 
     def action_lls(self2, args):
       self.ls_formatter.print_folder_children_lite_next(
-          self.current_fi, only_folders=self.only_folders)
+          self.current_fi)
 
     def action_stat(self2, args):
       obj_name = args.remotepath
@@ -1135,8 +1133,7 @@ class OneDriveShell:
     # All line content will be managed by complemtion
     readline.set_completer_delims("")
 
-    self.current_fi.retrieve_children_info(
-        only_folders=self.only_folders, recursive=False)
+    self.current_fi.retrieve_children_info(recursive=False)
 
     print(get_versionned_name())
     print('Type "help" or "license" for more information')
@@ -1184,12 +1181,6 @@ class OneDriveShell:
       elif cmd == "cd..":
         self.change_current_folder_to_parent()
 
-      elif my_input == "set onlyfolders" or my_input == "set of":
-        self.only_folders = True
-
-      elif my_input == "set noonlyfolders" or my_input == "set noof":
-        self.only_folders = False
-
       elif my_input[:7] == "set cs=" or my_input[:15] == "set columnsize=":
         str_cs = my_input[7:] if my_input[:7] == "set cs=" else my_input[15:]
 
@@ -1228,7 +1219,6 @@ class OneDriveShell:
             print("   set ( (<variable>|no<variable) | ( <variable>=<value> )")
             print()
             print("Variables that can be set and their aliases")
-            print("    onlyfolders/of      boolean       Retrieve info about folders")
             print(
                 "    columnsize/cs       int           Column Size of folder names and files names")
             print("                                      for long listing")
@@ -1367,7 +1357,6 @@ class LsFormatter():
           with_columns: bool,
           folder_desc_formatter,
           file_desc_formatter,
-          only_folders: bool = True,
           recursive: bool = False,
           depth: int = 999,
           is_first_folder: bool = False,
@@ -1377,19 +1366,14 @@ class LsFormatter():
 
     lg.debug(
         f"Entering __format_folder_children_lite({fi.path},"
-        f"{only_folders}, {recursive}, {depth})")
-    if ((not fi.folders_retrieval_has_started() and only_folders)
-            or (not fi.files_retrieval_has_started() and not only_folders)):
-      fi.retrieve_children_info(
-          only_folders=only_folders, max_retrieved_children=max_retrieved_children)
+        f"{recursive}, {depth})")
+    if (not fi.folders_retrieval_has_started()
+            or not fi.files_retrieval_has_started()):
+      fi.retrieve_children_info(max_retrieved_children=max_retrieved_children)
 
     folder_names = map(folder_desc_formatter, fi.children_folder)
-    if not only_folders:
-      file_names = map(file_desc_formatter, fi.children_file)
-      other_names = map(file_desc_formatter, fi.children_other)
-    else:
-      file_names = []
-      other_names = []
+    file_names = map(file_desc_formatter, fi.children_file)
+    other_names = map(file_desc_formatter, fi.children_other)
     all_names = list(folder_names) + list(file_names) + list(other_names)
 
     if with_columns:
@@ -1410,7 +1394,6 @@ class LsFormatter():
             with_columns,
             folder_desc_formatter,
             file_desc_formatter,
-            only_folders,
             True,
             depth - 1,
             is_first_folder=False,
@@ -1425,13 +1408,11 @@ class LsFormatter():
           self,
           fi: MsFolderInfo,
           recursive: bool = False,
-          only_folders: bool = True,
           depth: int = 999,
           max_retrieved_children: int = 200) -> str:
     return self.__format_folder_children(
         fi, False,
-        self.folder_formatter.format, self.file_formatter.format,
-        only_folders, recursive,
+        self.folder_formatter.format, self.file_formatter.format, recursive,
         depth, True, max_retrieved_children = max_retrieved_children
     )
 
@@ -1440,30 +1421,28 @@ class LsFormatter():
           self,
           fi: MsFolderInfo,
           recursive: bool = False,
-          only_folders: bool = True,
           depth: int = 999,
           with_pagination: bool = False,
           max_retrieved_children: int = 200) -> None:
     str_to_be_printed = self.format_folder_children_long(
-        fi, recursive, only_folders, depth, max_retrieved_children = max_retrieved_children)
+        fi, recursive, depth, max_retrieved_children = max_retrieved_children)
     print_with_optional_paging(str_to_be_printed, with_pagination)
 
   @beartype
   def format_folder_children_lite(
           self,
           fi: MsFolderInfo,
-          only_folders: bool = True,
           recursive: bool = False,
           depth: int = 999,
           max_retrieved_children: int = 200) -> str:
     lg.debug(
         f"Entering format_folder_children_lite({fi.path},"
-        f"{only_folders}, {recursive}, {depth})")
+        f"{recursive}, {depth})")
 
     result = self.__format_folder_children(
         fi, True,
         self.folder_formatter.format_lite, self.file_formatter.format_lite,
-        only_folders, recursive, depth, is_first_folder=True,
+        recursive, depth, is_first_folder=True,
         max_retrieved_children=max_retrieved_children)
 
     return result
@@ -1472,21 +1451,20 @@ class LsFormatter():
   def print_folder_children_lite(
           self,
           fi: MsFolderInfo,
-          only_folders: bool = True,
           with_pagination: bool = False,
           recursive: bool = False,
           max_retrieved_children: int = 200):
 
     str_to_be_printed = self.format_folder_children_lite(
-        fi, only_folders, recursive, 1,
+        fi, recursive, 1,
         max_retrieved_children = max_retrieved_children)
     print_with_optional_paging(str_to_be_printed, with_pagination)
 
   @beartype
   def print_folder_children_lite_next(
-          self, fi: MsFolderInfo, only_folders: bool = True):
-    if ((not fi.folders_retrieval_is_completed() and only_folders)
-            or (not fi.files_retrieval_is_completed() and not only_folders)):
-      fi.retrieve_children_info_next(only_folders=only_folders)
+          self, fi: MsFolderInfo):
+    if (not fi.folders_retrieval_is_completed()
+        and not fi.files_retrieval_is_completed()):
+      fi.retrieve_children_info_next()
 
-    self.print_folder_children_lite(fi, only_folders)
+    self.print_folder_children_lite(fi)

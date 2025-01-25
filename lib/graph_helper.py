@@ -50,35 +50,43 @@ class MsGraphClient:
     # Return the JSON result
     return events.json()
 
-  def get_ms_response_for_children_folder_path(
-          self, folder_path, only_folder=False):
+  def get_ms_response_for_children_from_folder_path(
+          self, folder_path):
     """ Get response value of ms graph for getting children info of a onedrive folder from folder path
     """
 
     # folder_path must start with '/'
     if folder_path == '':
-      fp = f"{MsGraphClient.graph_url}/me/drive/root/children"
+      fp = f"{MsGraphClient.graph_url}/me/drive/items/root/children"
     else:
       fp = f"{MsGraphClient.graph_url}/me/drive/root:{folder_path}:/children"
     return self.get_ms_response_for_children_folder_path_from_link(fp)
 
+
+  def get_ms_response_for_children_from_id(
+        self, id_item):
+    """ Get response value of ms graph for getting children info of a onedrive folder from id
+    """
+    return self.get_ms_response_for_children_folder_path_from_link(
+      f"{MsGraphClient.graph_url}/me/drive/items/{id_item}/children"
+    )
+
+
   def get_ms_response_for_children_folder_path_from_link(
-          self, link, only_folder=False):
-    """ Get response value of ms graph for getting children info of a onedrive folder from a given link
+          self, link):
+    """
+     Get response value of ms graph for getting children info of a onedrive folder from a given link
+     Bug of msGraph:
+      Unable to get children of folder named v1.0
+      A bug report has been opened https://feedbackportal.microsoft.com/feedback/idea/1c452009-cfd0-ef11-95f5-6045bdb154fd
+      Discussion here:
+        https://learn.microsoft.com/en-us/answers/questions/2145100/how-to-retrieve-children-of-onedrive-personal-fold
     """
     lg.debug(
         f"[get_ms_response_for_children_folder_path_from_link]Starting. link = "
         f"{link}"
         )
-    # folder_path must start with '/'
-    if only_folder:
-      param_urls = {
-          '$filter': 'folder ne any',
-          '$select': 'name,folder,id,size,parentReference,lastModifiedDateTime,createdDateTime'}
-    else:
-      param_urls = ()
 
-    ms_response = self.mgc.get(link, params=param_urls)
     ms_response = self.mgc.get(link)
     ms_response_json = ms_response.json()
     if 'error' in ms_response_json:
