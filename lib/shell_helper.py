@@ -1287,8 +1287,7 @@ class MsFolderFormatter(InfoFormatter):
 
   @beartype
   def format(self, what: MsFolderInfo):
-    status_subfolders = "<subfolders ok>" if what.folders_retrieval_has_started() else ""
-    status_subfiles = "<subfiles ok>" if what.files_retrieval_has_started() else ""
+    status_children = "<children ok>" if what.children_retrieval_is_completed() else ""
 
     fmdt = InfoFormatter.format_last_modified_datetime(what)
 
@@ -1306,7 +1305,7 @@ class MsFolderFormatter(InfoFormatter):
         alignleft(
             fname,
             self.max_name_size),
-        f"{what.child_count:>6}  {status_subfolders}{status_subfiles}").rstrip()
+        f"{what.child_count:>6}  {status_children}").rstrip()
     return result
 
   @beartype
@@ -1366,9 +1365,8 @@ class LsFormatter():
 
     lg.debug(
         f"Entering __format_folder_children_lite({fi.path},"
-        f"{recursive}, {depth})")
-    if (not fi.folders_retrieval_has_started()
-            or not fi.files_retrieval_has_started()):
+        f"{recursive}, {depth}, {max_retrieved_children})")
+    if not fi.children_retrieval_is_completed():
       fi.retrieve_children_info(max_retrieved_children=max_retrieved_children)
 
     folder_names = map(folder_desc_formatter, fi.children_folder)
@@ -1437,7 +1435,7 @@ class LsFormatter():
           max_retrieved_children: int = 200) -> str:
     lg.debug(
         f"Entering format_folder_children_lite({fi.path},"
-        f"{recursive}, {depth})")
+        f"{recursive}, {depth}, {max_retrieved_children})")
 
     result = self.__format_folder_children(
         fi, True,
@@ -1463,8 +1461,7 @@ class LsFormatter():
   @beartype
   def print_folder_children_lite_next(
           self, fi: MsFolderInfo):
-    if (not fi.folders_retrieval_is_completed()
-        and not fi.files_retrieval_is_completed()):
+    if (not fi.children_retrieval_is_completed()):
       fi.retrieve_children_info_next()
 
     self.print_folder_children_lite(fi)
