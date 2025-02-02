@@ -111,9 +111,9 @@ def mdownload_folder(
     elif file_needs_download(file_info, dest_path):
       lg.info(
           f"[mdownload_folder] download '{file_info.path}' in '{dest_path}'")
-      mgc.download_file_content(
-          file_info.path,
-          dest_path,
+      mgc.download_file_content_from_id_and_fullpath(
+          file_info.ms_id,
+          f"{dest_path}/{file_info.name}",
           retry_if_throttled=True, list_tqdm=list_tqdm)
 
     else:
@@ -229,7 +229,7 @@ def mupload_folder(
       else:
         if file_needs_upload(src_path, entry.name, ms_folder):
           lg.info(f"[mupload_folder]Upload file {entry.path}")
-          mgc.put_file_content(
+          mgc.put_file_content_from_fullpath_of_dstfolder(
               ms_folder.path, f"{src_path}/{entry.name}")
 
     elif entry.is_dir():

@@ -10,9 +10,10 @@ import urllib.parse
 from abc import ABC, abstractmethod
 from beartype import beartype
 from lib._typing import Optional, Tuple
-from lib.graph_helper import MsGraphClient
+from lib.graph_helper import MsGraphClient, MsGraphException
 from lib.datetime_helper import utc_dt_from_str_ms_datetime, utc_dt_now
 from lib.strpathutil import StrPathUtil
+from pathlib import PurePosixPath
 from threading import Lock
 
 
@@ -289,15 +290,16 @@ class MsFolderInfo(MsObject):
     ):
       nb_retrieved_children_start = self.get_nb_retrieved_children()
 
-      if self.next_link_children is None:
-        (ms_response, next_link) = self.__mgc.get_ms_response_for_children_from_folder_path(
-            self.path)
-      else:
-        (ms_response, next_link) = self.__mgc.get_ms_response_for_children_folder_path_from_link(
-          self.next_link_children)
-
-      if ms_response is None:  # Can occurs if folder name has changed
-        lg.warning("[retrieve_children_info]Warning - response is None")
+      try:
+        if self.next_link_children is None:
+          (ms_response, next_link) = self.__mgc.get_ms_response_for_children_from_id(
+              self.ms_id)
+        else:
+          (ms_response, next_link) = self.__mgc.get_ms_response_for_children_from_link(
+            self.next_link_children)
+      except MsGraphException as mge:
+        # Can occurs if folder name has changed
+        lg.warning(f"[retrieve_children_info]Warning - Nothing received from link {mge.src_link}")
         return (None, None)
 
       self.next_link_children = next_link
@@ -347,7 +349,7 @@ class MsFolderInfo(MsObject):
 
     if depth > 0 and (self.__children_retrieval_status != "all"):
 
-      (ms_response, next_link) = self.__mgc.get_ms_response_for_children_folder_path_from_link(
+      (ms_response, next_link) = self.__mgc.get_ms_response_for_children_from_link(
           self.next_link_children)
       self.next_link_children = next_link
 
@@ -730,7 +732,7 @@ class ObjectInfoFactory:
 
   @staticmethod
   def get_object_info_from_path(
-          mgc,
+          mgc: MsGraphClient,
           path,
           parent=None,
           no_warn_if_no_parent=False,
@@ -739,16 +741,15 @@ class ObjectInfoFactory:
       Return MsObject from its path.
       An ObjectRetrievalException is raised in case of error.
     """
-    if len(
-            path) > 1 and path[0] == "/":  # Convert relative path in absolute path
-      path = path[1:]
-    # Consider root
-    prefixed_path = "" if path == "/" or path == "" else f":/{path}"
-    r = mgc.mgc.get(
-        f'{MsGraphClient.graph_url}/me/drive/root{prefixed_path}').json()
+    lg.debug(f"[get_object_info_from_path]get path '{path}'")
+    r = mgc.get_ms_response_from_path(path)
+    if r is None:
+      raise ObjectInfoFactory.ObjectRetrievalException(
+          'CUSTOM_PATH_NOT_FOUND')
 
     return ObjectInfoFactory.get_object_info_from_mgc_response(
         mgc, r, parent, no_warn_if_no_parent, no_update_and_get_from_global_dict)
+
 
   @staticmethod
   def get_object_info_from_id(
@@ -759,9 +760,7 @@ class ObjectInfoFactory:
       Return MsObject from its id.
       An ObjectRetrievalException is raised in case of error.
     """
-    r = mgc.mgc.get(
-        f'{MsGraphClient.graph_url}/me/drive/items/{ms_id}').json()
-
+    r = mgc.get_ms_response_from_id(ms_id)
     return ObjectInfoFactory.get_object_info_from_mgc_response(
         mgc, r, parent, no_warn_if_no_parent, no_update_and_get_from_global_dict)
 

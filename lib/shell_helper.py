@@ -858,7 +858,7 @@ class OneDriveShell:
     def action_get(self2, args):
       file_name = args.remotepath
       if self.current_fi.relative_path_is_a_file(file_name):
-        self.mgc.download_file_content(
+        self.mgc.download_file_content_from_path(
             self.current_fi.get_child_file(file_name).path, os.getcwd())
       else:
         print(f"{file_name} is not a file of current folder({self.current_fi.path})")
@@ -892,7 +892,7 @@ class OneDriveShell:
         dst_folder_path = os.path.normpath(lfip_dst.path)
         dst_filename = rt_dst
 
-      self.mgc.put_file_content(dst_folder_path, args.srcfile, dst_filename)
+      self.mgc.put_file_content_from_fullpath_of_dstfolder(dst_folder_path, args.srcfile, dst_filename)
 
       msoi_new_file = OIF.get_object_info_from_path(
           self.mgc, f"{dst_folder_path}/{dst_filename}", parent=dst_parent)[1]

@@ -58,7 +58,7 @@ def action_upload(
         src_file: str,
         with_progress_bar: bool):
   # Upload a file
-  mgc.put_file_content(
+  mgc.put_file_content_from_fullpath_of_dstfolder(
       remote_folder,
       src_file,
       with_progress_bar=with_progress_bar
@@ -89,7 +89,7 @@ def action_raw_cmd(mgc: MsGraphClient):
 
 @beartype
 def action_download(mgc: MsGraphClient, remote_file: str, dst_local_path: str):
-  r = mgc.download_file_content(
+  r = mgc.download_file_content_from_path(
       remote_file,
       dst_local_path
   )

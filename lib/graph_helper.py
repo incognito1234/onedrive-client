@@ -5,6 +5,7 @@ import logging
 
 from requests_oauthlib import OAuth2Session
 from lib.strpathutil import StrPathUtil
+from pathlib import PurePosixPath
 import json
 import os
 import pprint
@@ -16,6 +17,15 @@ except Exception:
   tqdm = None
 
 lg = logging.getLogger("odc.msgraph")
+
+class MsGraphException(Exception):
+
+  def __init__(self, link):
+    super().__init__("Exception from msgraph")
+    self.src_link = link
+
+  def __str__(self):
+    return f"{self.args[0]} - raised with link '{self.src_link}'"
 
 
 class MsGraphClient:
@@ -50,6 +60,7 @@ class MsGraphClient:
     # Return the JSON result
     return events.json()
 
+
   def get_ms_response_for_children_from_folder_path(
           self, folder_path):
     """ Get response value of ms graph for getting children info of a onedrive folder from folder path
@@ -59,20 +70,20 @@ class MsGraphClient:
     if folder_path == '':
       fp = f"{MsGraphClient.graph_url}/me/drive/items/root/children"
     else:
-      fp = f"{MsGraphClient.graph_url}/me/drive/root:{folder_path}:/children"
-    return self.get_ms_response_for_children_folder_path_from_link(fp)
+      fp = f"{MsGraphClient.graph_url}/me/drive/items/root:{folder_path}:/children"
 
+    return self.get_ms_response_for_children_from_link(fp)
 
   def get_ms_response_for_children_from_id(
         self, id_item):
     """ Get response value of ms graph for getting children info of a onedrive folder from id
     """
-    return self.get_ms_response_for_children_folder_path_from_link(
+    return self.get_ms_response_for_children_from_link(
       f"{MsGraphClient.graph_url}/me/drive/items/{id_item}/children"
     )
 
 
-  def get_ms_response_for_children_folder_path_from_link(
+  def get_ms_response_for_children_from_link(
           self, link):
     """
      Get response value of ms graph for getting children info of a onedrive folder from a given link
@@ -94,7 +105,8 @@ class MsGraphClient:
         f"[get_ms_response_for_children_folder_path_from_link]Error received. Return None"
         f" - response = {ms_response_json}"
         f" - link = {link}")
-      return None
+      raise MsGraphException(link)
+
     else:
       if "@odata.nextLink" in ms_response_json:
         next_link = ms_response_json["@odata.nextLink"]
@@ -115,33 +127,52 @@ class MsGraphClient:
       time.sleep(1)
       t.update(1)
 
-  def download_file_content(
+
+  def download_file_content_from_path(
           self,
-          dst_path,
-          local_dst,
-          retry_if_throttled=False, max_retry=5,
+          dst_path: str,
+          local_dst: str,
+          retry_if_throttled:bool =False, max_retry:int =5,
           list_tqdm: list = []):
     """
       Try to download file 'dst_path' in folder 'local_dst'
       If local_dst is a folder, the file will be downloaded with
-      the same filename. Else, it will be name of the downloaded file.
+      the same filename. Else, it will be the name of the downloaded file.
+
+      Return 1 if download is successfull. 0 else.
+
+    """
+    file_name = dst_path.split("/").pop()
+    if os.path.isdir(local_dst):
+      local_fullpath = f"{local_dst}/{file_name}"
+    else:
+      local_fullpath = local_dst
+    file_id = self.get_id_from_path(dst_path)
+    return self.download_file_content_from_id_and_fullpath(
+      file_id, local_fullpath, retry_if_throttled, max_retry, list_tqdm
+    )
+
+
+  def download_file_content_from_id_and_fullpath(
+          self,
+          file_id: str,
+          local_fullpath: str,
+          retry_if_throttled: bool=False, max_retry: int=5,
+          list_tqdm: list = []):
+    """
+      Try to download file with id 'file_id' as full path 'local_full_path'
+      'local_full_path' must include the destination filename
 
       Return 1 if download is sucessfull. 0 else.
 
     """
     # Inspired from https://gist.github.com/mvpotter/9088499
-    file_name = dst_path.split("/").pop()
-    if os.path.isdir(local_dst):
-      local_filepath = f"{local_dst}/{file_name}"
-    else:
-      local_filepath = local_dst
-
-    download_url = f"{MsGraphClient.graph_url}/me/drive/root:/{dst_path}:/content"
+    file_name = str(PurePosixPath(local_fullpath).name)
+    download_url = f"{MsGraphClient.graph_url}/me/drive/items/{file_id}/content"
 
     nb_retry = 0
     while True:
       nb_retry += 1
-
       nb_retry_exception = 0
       while True:
 
@@ -224,7 +255,7 @@ class MsGraphClient:
     CHUNK_SIZE = 1048576 * 20  # 20 MB
     start = 0
 
-    with open(local_filepath, 'wb') as f:
+    with open(local_fullpath, 'wb') as f:
       for chunk in r.iter_content(chunk_size=CHUNK_SIZE):
         if chunk:  # filter out keep-alive new chunks
           lg.info(
@@ -235,7 +266,7 @@ class MsGraphClient:
           for t in list_tqdm:
             t.update(len(chunk))
     lg.info(
-        f"[download_file_content] Download of file '{file_name}' to '{local_dst}' - OK")
+        f"[download_file_content] Download of file '{local_fullpath}' - OK")
 
     if n_tqdm is not None:
       list_tqdm.pop()
@@ -243,10 +274,15 @@ class MsGraphClient:
 
     return 1
 
+  def get_item_id_from_path(self, path):
+    item_path = StrPathUtil.add_first_char_if_necessary(file_path, "/")
+
+
   def delete_file(self, file_path):
     file_path = StrPathUtil.add_first_char_if_necessary(file_path, "/")
+    item_id = self.get_id_from_path(file_path)
     r = self.mgc.delete(
-        f"{MsGraphClient.graph_url}/me/drive/root:{file_path}:")
+        f"{MsGraphClient.graph_url}/me/drive/items/{item_id}")
     if r.status_code == 404:
       return 0      # File not found
     elif r.status_code == 204:
@@ -258,25 +294,37 @@ class MsGraphClient:
     result = self.mgc.get(f"{MsGraphClient.graph_url}{cmd}")
     return result
 
-  def put_file_content(
-          self,
-          dst_folder,
-          src_file,
-          dst_file=None,
-          with_progress_bar=True):
-    lg.info(f"Start put_file_content('{dst_folder}','{src_file}')")
 
-    dst_folder = StrPathUtil.remove_first_char_if_necessary(dst_folder, "/")
+  def put_file_content_from_fullpath_of_dstfolder(
+          self,
+          dst_folder_fullpath,
+          src_file,
+          dst_file_name=None,
+          with_progress_bar=True):
+    lg.info(f"Start put_file_content_from_fullpath_of_dstfolder('{dst_folder_fullpath}','{src_file}')")
+    dst_folder = StrPathUtil.remove_first_char_if_necessary(dst_folder_fullpath, "/")
+    parent_id = self.get_id_from_path(dst_folder_fullpath)
+    if parent_id is None:
+      lg.warn(f"[put_file_content_from_fullpath_of_dstfolder]parent_id not found for folder '{dst_folder_fullpath}'")
+      return None
+    return self.put_file_content_from_id_of_dstfolder(
+      parent_id, src_file, dst_file_name, with_progress_bar
+    )
+
+
+  def put_file_content_from_id_of_dstfolder(
+          self,
+          dst_folder_id,
+          src_file,
+          dst_file_name=None,
+          with_progress_bar=True):
+    dst_file_name = dst_file_name if dst_file_name is not None else src_file.split("/").pop()
+
     total_size = os.path.getsize(src_file)
     lg.debug(f"File size = {total_size}")
-    file_name = dst_file if dst_file is not None else src_file.split("/").pop()
     # For file size < 4Mb
     if total_size < (1048576 * 4):
-      url = '{0}/me/drive/root:/{1}/{2}:/content'.format(
-          MsGraphClient.graph_url,
-          (dst_folder[1:] if dst_folder[0] == '/' else dst_folder),
-          file_name
-      )
+      url = f"{MsGraphClient.graph_url}/me/drive/items/{dst_folder_id}:/{dst_file_name}:/content"
       headers = {
           # 'Content-Type' : 'text/plain'
           'Content-Type': 'application/octet-stream'
@@ -293,7 +341,7 @@ class MsGraphClient:
     else:
       # For file size > 4 Mb
       # https://docs.microsoft.com/fr-fr/graph/api/driveitem-createuploadsession?view=graph-rest-1.0
-      url = f"{MsGraphClient.graph_url}/me/drive/root:/{dst_folder}/{file_name}:/createUploadSession"
+      url = f"{MsGraphClient.graph_url}/me/drive/items/{dst_folder_id}:/{file_name}:/createUploadSession"
       data = {
           "item": {
               "@microsoft.graph.conflictBehavior": "replace"
@@ -319,7 +367,7 @@ class MsGraphClient:
       # Init Progress bar
       if tqdm is not None and with_progress_bar:
         pbar = tqdm(
-            desc=f"Uploading {file_name}",
+            desc=f"Uploading {dst_file_name}",
             total=total_size,
             unit="B",
             unit_scale=True,
@@ -466,11 +514,8 @@ class MsGraphClient:
       Else return none
     """
     dst_path = StrPathUtil.remove_first_char_if_necessary(dst_path, "/")
-    if dst_path == '':
-      dst_url = f"{MsGraphClient.graph_url}/me/drive/root:/children"
-    else:
-      dst_url = f"{MsGraphClient.graph_url}/me/drive/root:/{dst_path}:/children"
-
+    parent_id = self.get_id_from_path(dst_path)
+    dst_url = f"{MsGraphClient.graph_url}/me/drive/items/{parent_id}/children"
     data = {'name': new_folder, 'folder': {},
             '@microsoft.graph.conflictBehavior': 'rename'}
     data_json = json.dumps(data)
@@ -494,11 +539,8 @@ class MsGraphClient:
     """
       Return TYPE_FILE, TYPE_FOLDER, TYPE_NONE
     """
-    path = StrPathUtil.remove_first_char_if_necessary(path, "/")
-    prefixed_path = "" if path == "" else f":/{path}"  # Consider root
-    r = self.mgc.get(
-        f"{MsGraphClient.graph_url}/me/drive/root{prefixed_path}").json()
-    if 'error' in r:
+    r = self.get_ms_response_from_path(path)
+    if r is None:
       return MsGraphClient.TYPE_NONE
 
     if ('folder' in r):
@@ -506,16 +548,52 @@ class MsGraphClient:
     else:
       return MsGraphClient.TYPE_FILE
 
-  def get_id(self, object_path: str):
+
+  def get_ms_response_from_path(self, object_path: str):
+    """ Return ms_response if it is not an error.
+        else return None
+    """
+    lg.debug(f"[get_ms_response_from_path]Get object with path '{object_path}'")
     object_path = StrPathUtil.remove_first_char_if_necessary(object_path, "/")
 
-    prefixed_path = "" if object_path == "" else f":/{object_path}"
-    r = self.mgc.get(
-        f"{MsGraphClient.graph_url}/me/drive/root{prefixed_path}").json()
-    if 'error' in r:
-      return None
+    if not self.__could_be_buggy_path(object_path):
+      # Consider root
+      prefixed_path = "" if object_path == "/" or object_path == "" else f":/{object_path}"
+      r = self.mgc.get(
+          f'{MsGraphClient.graph_url}/me/drive/items/root{prefixed_path}').json()
+      lg.debug(f"[get_ms_response_from_path]return {r}")
+      return None if 'error' in r else r
+
     else:
-      return r["id"]
+      lg.warn("[get_ms_response_from_path]Buggy path detected. Workaround applied")
+      id_object = self.get_id_from_path(object_path)
+      if id_object is not None:
+        return self.get_ms_response_from_id(id_object)
+      else:
+        lg.warn("[get_ms_response_from_path]object not found")
+        return None
+
+  def get_ms_response_from_id(self, id_item: str):
+    r = self.mgc.get(
+        f'{MsGraphClient.graph_url}/me/drive/items/{id_item}').json()
+    return r
+
+
+  def get_id_from_path(self, object_path: str):
+    """ Get ID of a msObject from path of these object.
+        Return None if object is not found
+    """
+    object_path = StrPathUtil.remove_first_char_if_necessary(object_path, "/")
+
+    posix_path = PurePosixPath(object_path)
+    if not self.__could_be_buggy_path(object_path):
+      prefixed_path = "" if object_path == "" else f":/{object_path}"
+      r = self.mgc.get(
+        f"{MsGraphClient.graph_url}/me/drive/root{prefixed_path}").json()
+      return r["id"] if "id" in r else None
+    else:
+      return self.__get_id_from_buggy_path(object_path)
+
 
   def move_object(self, src_path: str, dst_path: str):
     lg.info(f"[move]Entering move_object ({src_path},{dst_path})")
@@ -523,23 +601,30 @@ class MsGraphClient:
     src_path = StrPathUtil.remove_first_char_if_necessary(src_path, '/')
     dst_path = StrPathUtil.remove_first_char_if_necessary(dst_path, '/')
 
-    src_url = f'{MsGraphClient.graph_url}/me/drive/root:/{src_path}'
+    src_id = self.get_id_from_path(src_path)
+    if src_id is None:
+      lg.error(f"[move]Error during move. '{src_path}' not found.")
+      return False
 
     type_dst = self.path_type(dst_path)
 
+    posix_dst_path = PurePosixPath(dst_path)
     if type_dst == MsGraphClient.TYPE_FOLDER:
-      id_parent = self.get_id(dst_path)
-      part_src_path = os.path.split(src_path)
-      dst_name = part_src_path[1]
+      lg.debug(f"[move]Destination is a folder")
+      posix_src_path = PurePosixPath(src_path)
+      id_parent = self.get_id_from_path(str(posix_dst_path))
+      dst_name = str(posix_src_path.name)
 
     elif type_dst == MsGraphClient.TYPE_FILE:
       lg.error("[move]Destination file already exists")
       return False
 
     else:  # type_dst == MsGraphClient.TYPE_NONE
-      part_dst_path = os.path.split(dst_path)
-      id_parent = self.get_id(part_dst_path[0])
-      dst_name = part_dst_path[1]
+      lg.debug("[move]Destination does not exist.")
+      posix_dst_path = PurePosixPath(dst_path)
+      id_parent = self.get_id_from_path(str(posix_dst_path.parent))
+      lg.debug(f"[move]id_parent = {id_parent}")
+      dst_name = posix_dst_path.name
 
     if id_parent is None:
       lg.error("[move]parent not found")
@@ -553,7 +638,10 @@ class MsGraphClient:
         "name": dst_name
     }
     data_json = json.dumps(data)
-    r = self.mgc.patch(src_url, headers=headers, data=data_json)
+    lg.debug(f"[move]Move from '{src_path}' to parent whose id is '{id_parent}'")
+    r = self.mgc.patch(
+      f"{MsGraphClient.graph_url}/me/drive/items/{src_id}",
+      headers=headers, data=data_json)
 
     if r.status_code == 200:
       return True
@@ -564,7 +652,7 @@ class MsGraphClient:
   def create_share_link(self, path: str, share_type: str, password: str):
     share_path = StrPathUtil.remove_first_char_if_necessary(path, '/')
 
-    itemId = self.get_id(share_path)
+    itemId = self.get_id_from_path(share_path)
     if itemId is None:
       lg.error(f"[create_share_link]'{path}' does not exist")
       return None
@@ -592,6 +680,41 @@ class MsGraphClient:
 
   def close(self):
     self.mgc.close()
+
+
+  ### MSGRAPH_BUG MANAGEMENT
+  def __could_be_buggy_path(self, path: str):
+    """  `path` could be a buggy path
+    """
+    posix_path = PurePosixPath(path)
+    return any(s.startswith('v1.0') or s.startswith("V1.0") for s in posix_path.parts)
+
+
+  def __get_child_id_from_parent_id_and_child_name(self, parent_id: str, child_name: str):
+    (ms_response, next_link) = self.get_ms_response_for_children_from_id(parent_id)
+    while True:
+      if ms_response is None:
+        lg.warn(f"[__get_child_id_from_parent_id_and_child_name]Error while retrieving children of parent path for '{object_path}")
+        return None
+      for value_children in ms_response:
+        if value_children['name'] == child_name:
+          return value_children['id']
+      if next_link is None:
+        break
+      (ms_response, next_link) = self.get_ms_response_for_children_from_link(next_link)
+    return None
+
+
+  def __get_id_from_buggy_path(self, path: str):
+    posix_path = PurePosixPath(path)
+    id_start = 1 if len(posix_path.parts) > 0 and posix_path.parts[0] == PurePosixPath("/") else 0
+    parent_id = self.get_id_from_path("/")
+    for part in posix_path.parts[id_start:]:
+      str_part = str(part)
+      parent_id = self.__get_child_id_from_parent_id_and_child_name(parent_id, str_part)
+      if parent_id is None:
+        break
+    return parent_id
 
   class RetryStatus:
 
