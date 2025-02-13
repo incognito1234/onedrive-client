@@ -37,7 +37,7 @@ def parse_odc_args(default_action):
   parser.set_defaults(command="")
   sub_parsers = parser.add_subparsers(dest='cmd')
 
-  parser_init = sub_parsers.add_parser('init', help='init connexion')
+  parser_init = sub_parsers.add_parser('init', help='initialize connection')
   parser_init.set_defaults(command="init")
 
   parser_upload = sub_parsers.add_parser(
@@ -89,7 +89,7 @@ def parse_odc_args(default_action):
   parser_get_children.set_defaults(command="ls")
 
   parser_browse = sub_parsers.add_parser(
-      'shell', help='interaction shell')
+      'shell', help='interactive shell')
   parser_browse.set_defaults(command="shell")
 
   parser_download = sub_parsers.add_parser(
@@ -168,7 +168,7 @@ def parse_odc_args(default_action):
   parser_quickxorhash.add_argument('srcfile', type=str, help='source file')
   parser_quickxorhash.set_defaults(command="qxh")
 
-  parser_raw_cmd = sub_parsers.add_parser('raw_cmd', help="raw command")
+  parser_raw_cmd = sub_parsers.add_parser('raw_cmd', help="execute a raw command")
   parser_raw_cmd.set_defaults(command="raw_cmd")
 
   parser_version = sub_parsers.add_parser(

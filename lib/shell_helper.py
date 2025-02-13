@@ -464,7 +464,7 @@ class DeltaChecker():
 
   def __process_diff_delete(self, diff_item):
     """
-      If object exists, remove from child list and from global dictionnary
+      If object exists, remove from child list and from global dictionary
     """
     msobj = DictMsObject.get(diff_item["id"])
     if msobj is not None:
@@ -701,13 +701,13 @@ class ServerCheckDelta():
     self.update_delay_with_ema_value(self.__ema.value)
 
   def update_delay_with_ema_value(self, ema_value):
-    theorical_delay = ema_value * self.__coef_delay
-    if theorical_delay < self.__min_wait_delay:
+    theoretical_delay = ema_value * self.__coef_delay
+    if theoretical_delay < self.__min_wait_delay:
       self.__wait_delay = self.__min_wait_delay
-    elif theorical_delay > self.__max_wait_delay:
+    elif theoretical_delay > self.__max_wait_delay:
       self.__wait_delay = self.__max_wait_delay
     else:
-      self.__wait_delay = theorical_delay
+      self.__wait_delay = theoretical_delay
     self.lg.debug(
         f"new wait delay={self.__wait_delay:.1f} - ema_value={ema_value:.1f}")
 
@@ -1031,7 +1031,7 @@ class OneDriveShell:
         '-d',
         type=int,
         default=1,
-        help='Recursing depth (Default=1)')
+        help='Recursion depth (Default=1)')
     sp_ls.add_argument(
         'path',
         type=str,

@@ -163,9 +163,9 @@ def action_mkdir(mgc: MsGraphClient, remote_folder: str):
   part_path = os.path.split(remote_folder)
   r = mgc.create_folder(part_path[0], part_path[1])
   if r is not None:
-    lg.info(f"action_mkdir - folder {r} has just been create")
+    lg.info(f"action_mkdir - folder {r} has just been created")
   else:
-    lg.error(f"action_mkdir - error during creation folder {remote_folder}")
+    lg.error(f"action_mkdir - error during creation of folder {remote_folder}")
   return r
 
 
