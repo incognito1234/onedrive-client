@@ -6,7 +6,7 @@ ODC is a command line tool to interact with a Microsoft OneDrive Personal Storag
 
 The following commands are available:
 
-    init              Init connexion
+    init              Init connection
     put               Upload a file
     mput              Upload a complete folder
     whoami            Get information about connected user
@@ -20,11 +20,11 @@ The following commands are available:
     rm                Remove a file or a folder
     mkdir             Make a folder
 
-`odc.py` with no argument launchs the interactive shell. On linux platform, it includes a completion feature which recognizes remote files and folders.
+`odc.py` with no argument launches the interactive shell. On linux platform, it includes a completion feature which recognizes remote files and folders.
 
 `put`/`get` commands include the uploading/downloading of large file with a retry mechanism in case a chunk is not correctly uploaded/downloaded.
 
-A progress bar is optionnally available for downloading and uploading large file if the `tqdm` package is installed.
+A progress bar is optionally available for downloading and uploading large file if the `tqdm` package is installed.
 
 `mget` and `get` commands include a server throttling detection mechanism: if a throttling message is received, a timer is triggered until the server becomes available. In the case you plan to download large file or folder, it is recommended to install the `tqdm` package so that you can see the remaining time which may be significantly long (more than one hour).
 
@@ -47,11 +47,11 @@ The screencast above demonstrates the following features:
 
 ## Requisites
 ODC has been tested with the following environment
-- python 3.8/python 3.9/python 3.10
+- python 3.11/python 3.12
 - Personal Microsoft account
 
 Progress bar can be enabled when a large file or a complete folder is uploaded or downloaded. This feature needs `tqdm` python module.
-Differential uploading and downloading (`mput` and `mget` comands) are available if a`quickxorhash` command is available in `PATH` variable or if `quickxorhash` python module is installed.
+Differential uploading and downloading (`mput` and `mget` commands) are available if a`quickxorhash` command is available in `PATH` variable or if `quickxorhash` python module is installed.
 
 ## Installation
 
@@ -93,15 +93,15 @@ Differential uploading and downloading (`mput` and `mget` comands) are available
 
       $ pip install pyreadline3
 
-- Configure connexion to OneDrive
+- Configure connection to OneDrive
 
   - Copy `oauth_settings.yml.sample` in `oauth_settings.yml`
   - Copy/Paste `Application ID` and `Secret Value` of azure application in the relevant parts of `oauth_settings.yml` file
-  - Initiate connexion
+  - Initiate connection
 
         $ ./odc.py init
         ... Copy/Paste provided URL in a browser
-        ... Copy/Paste URL of the browser in the console
+        ... Copy/Paste URL from the browser into the console
 
 - Optional: create a shortcut to launch ODC
 
@@ -116,7 +116,7 @@ Differential uploading and downloading (`mput` and `mget` comands) are available
       $ cd <venv_folder>/odc
       $ ./odc.py <args>
 
-  or the shortcut has been created
+  or if the shortcut has been created
 
       $ odc <args>
 
@@ -125,18 +125,19 @@ _Only main changes are listed here_
 
 ### Version 1.4
 - While listing folder, print year if last modification is older than 6 months
+- Implements a workaround for the MSGraph bug affecting paths containing subfolders starting with v1.0 (see `CONTRIBUTING.MD`)
 
 ### Version 1.3
-- Improve error management during download
-- Add exclusion list as an option of mget command
+- Improves error management during download
+- Add exclusion list as an option to the `mget` command
 - Consider drive object which are not file or folder (could be a Notebook)
 - Use quickxorhash module if available (Thanks [wienand](https://github.com/incognito1234/onedrive-client/pull/5))
-- Add max_retrieved_children in `ls` command to list folders with more than 200 children
+- Add `max_retrieved_children` to the `ls` command to list folders with more than 200 children
 
 ### Version 1.2
 - Consider error when downloading file with re-try mechanisms
 - Manage server throttling during download
-- Add progression bar (with tqdm package) during downloading
+- Add progress bar (with tqdm package) during downloading
 - Add -l option for ls command
 
 ### Version 1.1
