@@ -341,7 +341,7 @@ class MsGraphClient:
     else:
       # For file size > 4 Mb
       # https://docs.microsoft.com/fr-fr/graph/api/driveitem-createuploadsession?view=graph-rest-1.0
-      url = f"{MsGraphClient.graph_url}/me/drive/items/{dst_folder_id}:/{file_name}:/createUploadSession"
+      url = f"{MsGraphClient.graph_url}/me/drive/items/{dst_folder_id}:/{dst_file_name}:/createUploadSession"
       data = {
           "item": {
               "@microsoft.graph.conflictBehavior": "replace"
