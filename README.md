@@ -2,6 +2,11 @@
 
 ODC is a command line tool to interact with a Microsoft OneDrive Personal Storage.
 
+![Python 3.11](https://img.shields.io/badge/python-3.11-blue)
+![Python 3.12](https://img.shields.io/badge/python-3.12-blue)
+![Tested with OneDrive Personal](https://img.shields.io/badge/Tested%20with-OneDrive%20Personal%20Account-blue)
+
+
 ## Available features
 
 The following commands are available:
@@ -38,20 +43,16 @@ Parameters of each command are described in help output
 
 
 The screencast above demonstrates the following features:
-  - Uploading of complete folder
+  - Uploading a complete folder
   - Browsing OneDrive from the shell
-  - Autocompletion of folder and file name
-  - File removal from the shell
-  - Detection of external changes by shell
-  - Large file upload
+  - Autocompletion of folder and file names
+  - Removing files from the shell
+  - Detection of external changes by the shell
+  - Uploading large file
 
 ## Requisites
-ODC has been tested with the following environment
-- python 3.11/python 3.12
-- Personal Microsoft account
-
-Progress bar can be enabled when a large file or a complete folder is uploaded or downloaded. This feature needs `tqdm` python module.
-Differential uploading and downloading (`mput` and `mget` commands) are available if a`quickxorhash` command is available in `PATH` variable or if `quickxorhash` python module is installed.
+A progress bar can be enabled when a large file or a complete folder is uploaded or downloaded. This feature requires the `tqdm` Python module.
+Differential uploading and downloading (`mput` and `mget` commands) are available if a`quickxorhash` command is available in the `PATH` variable or if the `quickxorhash` Python module is installed.
 
 ## Installation
 
@@ -73,35 +74,35 @@ Differential uploading and downloading (`mput` and `mget` commands) are availabl
 
 ### On client computer
 
-- Create python environment and retrieve the code
+- Create Python environment and retrieve the code
 
       $ python3 -m venv envodc
       $ cd envodc
       $ git clone https://github.com/incognito1234/onedrive-client.git odc
       $ cd odc
 
-- Prepare python environment and install required packages
+- Prepare the Python environment and install the required packages
 
       $ . ../bin/activate
       $ pip -r requirements.txt
 
-- If you want to have progress bar during upload or downloading, install `tqdm` package
+- If you want to have a progress bar during upload or download, install `tqdm` package
 
       $ pip install tqdm
 
-- On Windows platform, import the package `pyreadline3`
+- On the Windows platform, import the package `pyreadline3`
 
       $ pip install pyreadline3
 
-- Configure connection to OneDrive
+- Configure the connection to OneDrive
 
-  - Copy `oauth_settings.yml.sample` in `oauth_settings.yml`
-  - Copy/Paste `Application ID` and `Secret Value` of azure application in the relevant parts of `oauth_settings.yml` file
+  - Copy `oauth_settings.yml.sample` to `oauth_settings.yml`
+  - Copy/Paste `Application ID` and `Secret Value` of the Azure application into the relevant parts of `oauth_settings.yml` file
   - Initiate connection
 
         $ ./odc.py init
-        ... Copy/Paste provided URL in a browser
-        ... Copy/Paste URL from the browser into the console
+        ... Copy/Paste the provided URL into a browser
+        ... Copy/Paste the URL from the browser into the console
 
 - Optional: create a shortcut to launch ODC
 
@@ -116,7 +117,7 @@ Differential uploading and downloading (`mput` and `mget` commands) are availabl
       $ cd <venv_folder>/odc
       $ ./odc.py <args>
 
-  or if the shortcut has been created
+  or if the shortcut has been created,
 
       $ odc <args>
 
@@ -130,7 +131,7 @@ _Only main changes are listed here_
 ### Version 1.3
 - Improves error management during download
 - Add exclusion list as an option to the `mget` command
-- Consider drive object which are not file or folder (could be a Notebook)
+- Consider drive objects which are not file or folder (could be a Notebook)
 - Use quickxorhash module if available (Thanks [wienand](https://github.com/incognito1234/onedrive-client/pull/5))
 - Add `max_retrieved_children` to the `ls` command to list folders with more than 200 children
 
