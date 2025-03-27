@@ -36,7 +36,7 @@ class quickxorhash:
       if p.returncode != 0:
         return None
       else:
-        return str(p.stdout, 'utf-8')[:-1]
+        return str(p.stdout, 'utf-8').rstrip('\n').rstrip('\r')
     else:
       return None
 
