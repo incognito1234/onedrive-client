@@ -182,7 +182,7 @@ class MsGraphClient:
         except Exception as ex:
           nb_retry_exception += 1
           lg.error(
-              f"Exception during download_file_content({dst_path}) - "
+              f"Exception during download_file_content({local_fullpath}) - "
               f"{ex=} - {type(ex)=} - Wait 10 seconds"
           )
           if nb_retry_exception < 3:
@@ -199,7 +199,7 @@ class MsGraphClient:
       if (r.status_code not in (429, 503) or not retry_if_throttled):
         # 429 = TooManyRequests - 503 = Service Unavailable
         lg.error(
-            f"Error during processing of download_file_content({dst_path}) - "
+            f"Error during processing of download_file_content({local_fullpath}) - "
             f"{r.reason} (error {r.status_code})")
         return 0
 
@@ -207,7 +207,7 @@ class MsGraphClient:
       # https://learn.microsoft.com/en-US/sharepoint/dev/general-development/how-to-avoid-getting-throttled-or-blocked-in-sharepoint-online
       if nb_retry >= max_retry:
         lg.error(
-            f"Error during processing of try_download_file_content({dst_path}) -"
+            f"Error during processing of try_download_file_content({local_fullpath}) -"
             "Max retry has been reached. Stop function.")
         return 0
 
@@ -220,7 +220,7 @@ class MsGraphClient:
         header_params["Retry-After"] = 11
 
       lg.warn(
-          f"Warn during processing of download_file_content({dst_path}) -"
+          f"Warn during processing of download_file_content({local_fullpath}) -"
           f"Client application has been throttled"
           f" (error code = {r.status_code}). Wait for "
           f"{header_params['Retry-After']} seconds - Retry nb = {nb_retry} "
@@ -273,10 +273,6 @@ class MsGraphClient:
       n_tqdm.close()
 
     return 1
-
-  def get_item_id_from_path(self, path):
-    item_path = StrPathUtil.add_first_char_if_necessary(file_path, "/")
-
 
   def delete_file(self, file_path):
     file_path = StrPathUtil.add_first_char_if_necessary(file_path, "/")
@@ -419,7 +415,7 @@ class MsGraphClient:
               'Content-Length': str(current_size),
               'Content-Range': f"bytes {current_start}-{current_end}/{total_size}"}
 
-          #simu_error = i==5
+          #simu_error = i==5 # Uncomment to simulate an error
           if not simu_error:
             r = self.mgc.put(
                 uurl,
@@ -694,7 +690,7 @@ class MsGraphClient:
     (ms_response, next_link) = self.get_ms_response_for_children_from_id(parent_id)
     while True:
       if ms_response is None:
-        lg.warn(f"[__get_child_id_from_parent_id_and_child_name]Error while retrieving children of parent path for '{object_path}")
+        lg.warn(f"[__get_child_id_from_parent_id_and_child_name]Error while retrieving children of parent with ID '{parent_id}")
         return None
       for value_children in ms_response:
         if value_children['name'] == child_name:
