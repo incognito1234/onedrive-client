@@ -2,8 +2,7 @@
 
 ODC is a command line tool to interact with a Microsoft OneDrive Personal Storage.
 
-![Python 3.11](https://img.shields.io/badge/python-3.11-blue)
-![Python 3.12](https://img.shields.io/badge/python-3.12-blue)
+![Python 3.10|3.11|3.12](https://img.shields.io/badge/python-3.10|3.11|3.12-blue)
 ![Tested with OneDrive Personal](https://img.shields.io/badge/Tested%20with-OneDrive%20Personal%20Account-blue)
 
 
@@ -67,7 +66,7 @@ Differential uploading and downloading (`mput` and `mget` commands) are availabl
 
 - Create a secret assigned to this application
 
-> Tip to register an application on azure portal
+> Tip to register an application on Azure portal
 > *Jul 7 2024 process*
 > `portal.azure.com` ⇨ `Microsoft Entra ID` ⇨`App Registrations`
 
@@ -84,7 +83,7 @@ Differential uploading and downloading (`mput` and `mget` commands) are availabl
 - Prepare the Python environment and install the required packages
 
       $ . ../bin/activate
-      $ pip -r requirements.txt
+      $ pip install -r requirements.txt
 
 - If you want to have a progress bar during upload or download, install `tqdm` package
 
@@ -100,17 +99,17 @@ Differential uploading and downloading (`mput` and `mget` commands) are availabl
   - Copy/Paste `Application ID` and `Secret Value` of the Azure application into the relevant parts of `oauth_settings.yml` file
   - Initiate connection
 
-        $ ./odc.py init
-        ... Copy/Paste the provided URL into a browser
-        ... Copy/Paste the URL from the browser into the console
+      $ ./odc.py init
+      ... Copy/Paste the provided URL into a browser
+      ... Copy/Paste the URL from the browser into the console
 
 - Optional: create a shortcut to launch ODC
 
-        $ cat << EOF > /usr/local/sbin/odc
-        #!/bin/sh
+      $ cat << EOF > /usr/local/sbin/odc
+      #!/bin/sh
 
-        <venv_folder>/bin/python <venv_folder>/odc/odc.py $@
-        EOF
+      <venv_folder>/bin/python <venv_folder>/odc/odc.py $@
+      EOF
 
 - It is now possible to use ODC
 
@@ -123,6 +122,9 @@ Differential uploading and downloading (`mput` and `mget` commands) are availabl
 
 ## Changelog
 _Only main changes are listed here_
+
+### Version 1.4.1
+- Fix a bug that could occur during the download process
 
 ### Version 1.4
 - While listing folder, print year if last modification is older than 6 months

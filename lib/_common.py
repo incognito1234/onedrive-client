@@ -2,7 +2,7 @@
 #  This file is part of OneDrive Client Program which is released under MIT License
 #  See file LICENSE for full license details
 
-VERSION = "1.4.0"
+VERSION = "1.4.1"
 PROGRAM_NAME = "OneDrive Client Program"
 
 
